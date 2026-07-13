@@ -1,0 +1,119 @@
+{
+  "name": "jsonstat-io",
+  "version": "0.1.0",
+  "description": "Bidirectional bridge between the columnar stack (Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV) and JSON-stat 2.0 cubes. An Arrow-hubbed interop layer for the lakehouse ecosystem.",
+  "license": "Apache-2.0",
+  "author": "Xavier Badosa",
+  "homepage": "https://github.com/jsonstat/io#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jsonstat/io.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jsonstat/io/issues"
+  },
+  "keywords": [
+    "json-stat",
+    "jsonstat",
+    "arrow",
+    "apache-arrow",
+    "parquet",
+    "duckdb",
+    "polars",
+    "csvw",
+    "statistical-data",
+    "cube",
+    "lakehouse",
+    "interop"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./arrow": {
+      "types": "./dist/arrow/index.d.ts",
+      "import": "./dist/arrow/index.js",
+      "require": "./dist/arrow/index.cjs"
+    },
+    "./parquet": {
+      "types": "./dist/sources/parquet.d.ts",
+      "import": "./dist/sources/parquet.js",
+      "require": "./dist/sources/parquet.cjs"
+    },
+    "./duckdb": {
+      "types": "./dist/sources/duckdb.d.ts",
+      "import": "./dist/sources/duckdb.js",
+      "require": "./dist/sources/duckdb.cjs"
+    },
+    "./polars": {
+      "types": "./dist/sources/polars.d.ts",
+      "import": "./dist/sources/polars.js",
+      "require": "./dist/sources/polars.cjs"
+    },
+    "./csvw": {
+      "types": "./dist/sources/csvw.d.ts",
+      "import": "./dist/sources/csvw.js",
+      "require": "./dist/sources/csvw.cjs"
+    },
+    "./csv": {
+      "types": "./dist/sources/csv.d.ts",
+      "import": "./dist/sources/csv.js",
+      "require": "./dist/sources/csv.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "jsonstat-io": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "apache-arrow": "^17.0.0",
+    "commander": "^12.1.0"
+  },
+  "optionalDependencies": {
+    "@duckdb/duckdb-wasm": "^1.29.0",
+    "duckdb-async": "^1.2.1",
+    "jsonstat-validator": "^2.5.0",
+    "nodejs-polars": "^0.15.0",
+    "parquet-wasm": "^0.6.1"
+  },
+  "peerDependenciesMeta": {
+    "@duckdb/duckdb-wasm": { "optional": true },
+    "duckdb-async": { "optional": true },
+    "jsonstat-validator": { "optional": true },
+    "nodejs-polars": { "optional": true },
+    "parquet-wasm": { "optional": true }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

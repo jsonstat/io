@@ -1,0 +1,20 @@
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Test / coverage
+coverage/
+.vitest/
+
+# Editor / OS
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# Lockfiles (keep package-lock.json if preferred; ignore yarn/pnpm here)
+yarn.lock
+pnpm-lock.yaml

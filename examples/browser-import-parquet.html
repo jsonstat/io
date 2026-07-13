@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jsonstat-io — Browser Parquet Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.5rem; }
+    .step { margin: 1rem 0; padding: 0.75rem; background: #f5f5f5; border-radius: 4px; }
+    .error { color: #c00; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    input[type="file"] { font-size: 1rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; }
+    th { background: #e8e8e8; }
+  </style>
+</head>
+<body>
+  <h1>jsonstat-io — Parquet → JSON-stat (Browser)</h1>
+  <p>
+    This demo reads a <code>.parquet</code> file entirely in the browser using
+    <code>parquet-wasm</code> and converts it to a JSON-stat 2.0 dataset with
+    <code>jsonstat-io</code>. No server involved.
+  </p>
+
+  <div class="step">
+    <label><strong>1. Select a Parquet file:</strong></label><br />
+    <input type="file" id="file" accept=".parquet" />
+    <p style="margin:0.5rem 0 0;font-size:0.85rem;color:#666;">
+      Don't have one handy?
+      <button type="button" id="loadSample" style="font-size:0.85rem;padding:0.2rem 0.6rem;">
+        Load sample <code>canada.parquet</code>
+      </button>
+      (fetched from the GitHub repo).
+    </p>
+  </div>
+
+  <div class="step">
+    <strong>2. Convert:</strong>
+    <button id="convert" disabled>Convert to JSON-stat</button>
+    <span id="status"></span>
+  </div>
+
+  <div id="error" class="error"></div>
+
+  <h2>Result</h2>
+  <div id="summary"></div>
+  <h3>JSON-stat output</h3>
+  <pre id="json">Select a file and click "Convert".</pre>
+
+  <!-- Import maps: all dependencies are loaded from CDNs, so this page works
+       standalone once jsonstat-io is published on npm. No local build or
+       static server required.
+
+       NOTE on URLs:
+       - `apache-arrow` uses jsDelivr's `+esm` auto-bundle, which always points
+         at the package's canonical ESM entry. The older `esm/Arrow.esm.min.js`
+         path does NOT exist in apache-arrow@17 (the browser entry is
+         `Arrow.dom.mjs`), so a hardcoded path 404s. `+esm` avoids that.
+       - `parquet-wasm` ships a real `esm/parquet_wasm.js` file.
+       - `jsonstat-io` is pinned to a published npm version. The main entry
+         (serialize) and the /parquet subpath (parquetToDataset) both resolve
+         via the import map; dist chunk imports are relative, so they resolve
+         naturally on the CDN.
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "apache-arrow": "https://cdn.jsdelivr.net/npm/apache-arrow@17/+esm",
+      "parquet-wasm": "https://cdn.jsdelivr.net/npm/parquet-wasm@0.6/esm/parquet_wasm.js",
+      "jsonstat-io": "https://cdn.jsdelivr.net/npm/jsonstat-io@0.1.0/dist/index.js",
+      "jsonstat-io/parquet": "https://cdn.jsdelivr.net/npm/jsonstat-io@0.1.0/dist/sources/parquet.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    // parquetToDataset lives in the /parquet subpath, NOT the main entry —
+    // the main entry keeps parquet-wasm out of bundles by importing it lazily.
+    import { parquetToDataset } from "jsonstat-io/parquet";
+    import { serialize } from "jsonstat-io";
+
+    // Sample file served from the GitHub repo (the npm package ships only
+    // dist/ + docs, not the examples/ folder, so we fetch it via jsDelivr's
+    // GitHub mode instead of the npm CDN).
+    const SAMPLE_URL =
+      "https://cdn.jsdelivr.net/gh/jsonstat/io@main/examples/canada.parquet";
+
+    const fileInput = document.getElementById("file");
+    const convertBtn = document.getElementById("convert");
+    const loadSampleBtn = document.getElementById("loadSample");
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+    const summaryEl = document.getElementById("summary");
+    const jsonEl = document.getElementById("json");
+
+    let selectedBytes = null;
+
+    /** Load a Uint8Array from a URL and arm the converter. */
+    async function loadBytes(name, bytes) {
+      selectedBytes = bytes;
+      statusEl.textContent = `Loaded ${name} (${bytes.length} bytes)`;
+      convertBtn.disabled = false;
+    }
+
+    fileInput.addEventListener("change", async (e) => {
+      errorEl.textContent = "";
+      const file = e.target.files[0];
+      if (!file) {
+        convertBtn.disabled = true;
+        return;
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      await loadBytes(file.name, new Uint8Array(arrayBuffer));
+    });
+
+    loadSampleBtn.addEventListener("click", async () => {
+      errorEl.textContent = "";
+      statusEl.textContent = "Fetching sample canada.parquet ...";
+      try {
+        const res = await fetch(SAMPLE_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        const buf = await res.arrayBuffer();
+        await loadBytes("canada.parquet", new Uint8Array(buf));
+      } catch (err) {
+        errorEl.textContent = `Could not load sample: ${err.message}`;
+        statusEl.textContent = "";
+      }
+    });
+
+    convertBtn.addEventListener("click", async () => {
+      errorEl.textContent = "";
+      summaryEl.innerHTML = "";
+      jsonEl.textContent = "Converting...";
+
+      try {
+        // parquet-wasm needs its WASM binary instantiated in the browser before
+        // any readParquet/writeParquet call. The ESM build exports the init
+        // function as the module's DEFAULT export (not as a named `init`), and
+        // calling it with no argument makes it fetch `parquet_wasm_bg.wasm`
+        // from the module's own URL (import.meta.url) — which jsDelivr serves.
+        // The two are idempotent: __wbg_init early-returns once `wasm` is set.
+        const dataset = await parquetToDataset(selectedBytes, {
+          init: async () => {
+            const wasm = await import("parquet-wasm");
+            const initialize =
+              typeof wasm.default === "function"
+                ? wasm.default // ESM: default export = __wbg_init
+                : wasm.init;   // fallback: some builds use a named init()
+            if (typeof initialize === "function") await initialize();
+          },
+          // Optional hints — if omitted, the converter auto-detects.
+          valueForm: "auto",
+        });
+
+        // Serialize to canonical JSON.
+        const json = serialize(dataset, { pretty: true, canonicalKeys: true });
+        jsonEl.textContent = json;
+
+        // Show a summary.
+        const totalCells = dataset.size.reduce((a, b) => a * b, 1);
+        const valueForm = Array.isArray(dataset.value) ? "dense" : "sparse";
+        summaryEl.innerHTML = `
+          <table>
+            <tr><th>Dimensions</th><td>${dataset.id.join(", ")}</td></tr>
+            <tr><th>Size</th><td>${dataset.size.join(" × ")} = ${totalCells} cells</td></tr>
+            <tr><th>Roles</th><td><code>${JSON.stringify(dataset.role)}</code></td></tr>
+            <tr><th>Value form</th><td>${valueForm}</td></tr>
+          </table>
+        `;
+      } catch (err) {
+        errorEl.textContent = `Error: ${err.message}`;
+        jsonEl.textContent = "(conversion failed)";
+      }
+    });
+  </script>
+</body>
+</html>
