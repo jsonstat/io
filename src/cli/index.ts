@@ -25,6 +25,7 @@ import { Command } from "commander";
 import { tableToIPC } from "apache-arrow";
 import type { Table } from "apache-arrow";
 import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import {
   importToDataset,
   exportDataset,
@@ -104,7 +105,7 @@ async function validateDataset(dataset: JsonStatDataset): Promise<string[]> {
 // ---------------------------------------------------------------------------
 // Program definition
 // ---------------------------------------------------------------------------
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 function createProgram(): Command {
   const program = new Command();
@@ -347,10 +348,18 @@ function csvwMetadataSibling(csvPath: string): string {
 // ---------------------------------------------------------------------------
 
 // Only run when invoked directly (not when imported by tests).
-// ESM-safe: compare the resolved entry path against this module's URL.
+// ESM-safe: resolve both paths through symlinks before comparing, so the
+// entrypoint still fires when the bin is reached via a symlink (which is how
+// `npx`, `npm install`, and global installs link executables). A naive
+// `process.argv[1] === fileURLToPath(import.meta.url)` comparison fails under
+// symlinks because argv[1] is the link path while import.meta.url is the real
+// file path — that would silently skip `parseAsync`, leaving the CLI inert.
 const isMain = (() => {
   try {
-    return process.argv[1] === fileURLToPath(import.meta.url);
+    const invokedFrom = realpathSync(process.argv[1] ?? "");
+    const modulePath = fileURLToPath(import.meta.url);
+    const resolvedModule = realpathSync(modulePath);
+    return invokedFrom === resolvedModule;
   } catch {
     return false;
   }
