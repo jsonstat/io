@@ -402,6 +402,7 @@ export function buildDataset(obs: Observations, options: BuildOptions = {}): Bui
     if (meta.label) dataset.label = meta.label;
     if (meta.source) dataset.source = meta.source;
     if (meta.updated) dataset.updated = meta.updated;
+    if (meta.href) dataset.href = meta.href;
     if (meta.extension) dataset.extension = meta.extension;
   }
 

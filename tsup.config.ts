@@ -28,6 +28,7 @@ const libraryConfig: Options = {
     "sources/polars": "src/sources/polars.ts",
     "sources/csvw": "src/sources/csvw.ts",
     "sources/csv": "src/sources/csv.ts",
+    "sources/csvstat": "src/sources/csvstat.ts",
     "sources/datapackage": "src/sources/datapackage.ts",
     "cli/index": "src/cli/index.ts",
   },

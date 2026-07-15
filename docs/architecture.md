@@ -95,6 +95,7 @@ Each adapter is bidirectional — a thin wrapper that, on import, gets bytes (or
 - **`polars.ts`** — `polarsToCube(df)` / `cubeToPolars(obs)` via `toArrow()`/`fromArrow()`. Node only.
 - **`csvw.ts`** — `csvwToCube(text, metadata)` / `cubeToCsvw(obs)` uses CSVW metadata for lossless mapping. No deps.
 - **`csv.ts`** — `csvToCube(text)` / `cubeToCsv(obs)` infers measure/dimensions heuristically on import; serializes dimensions+measure+status columns on export. No deps.
+- **`csvstat.ts`** — `csvstatToCube(text)` / `cubeToCsvstat(obs)` handles the CSV-stat (JSV) format: CSV with an inline metadata header that round-trips dimensions, roles, category labels/units, status and dataset `label`/`source`/`updated`/`href`. No deps. See [`formats/csv-stat.md`](./formats/csv-stat.md).
 - **`datapackage.ts`** — `datapackageToCube(text, descriptor)` / `cubeToDataPackage(obs)` maps a Frictionless Data Package schema (`fields`/`primaryKey`/`type`/`rdfType`) and round-trips JSON-stat semantics via the `jsonstat:*` vendor extension keys. No deps.
 
 All optional peer imports are **lazy** (`await import(...)`) so they never enter a bundle that doesn't use them.
@@ -149,9 +150,9 @@ Every source produces this shape. `buildDataset` is the only consumer that pivot
 
 Both directions are fully implemented and tested:
 
-- **Import** (columnar → JSON-stat): `arrowToCube` handles Arrow-native sources; `csvToCube` / `csvwToCube` / `datapackageToCube` handle text formats; `buildDataset` scatters into the cube. Exposed via [`importToDataset`](./api.md#importtodatasetsource-options).
-- **Export** (JSON-stat → columnar): `readDataset` flattens the cube to the IR; `cubeToArrow` handles Arrow-native targets (Parquet, DuckDB, Polars); `cubeToCsv` / `cubeToCsvw` / `cubeToDataPackage` handle text targets. Exposed via [`exportDataset`](./api.md#exportdatasetdataset-options).
-- **CLI:** the `--to` flag drives direction — `jsonstat` (default) imports; `arrow|parquet|csv|csvw|datapackage` exports.
+- **Import** (columnar → JSON-stat): `arrowToCube` handles Arrow-native sources; `csvToCube` / `csvwToCube` / `csvstatToCube` / `datapackageToCube` handle text formats; `buildDataset` scatters into the cube. Exposed via [`importToDataset`](./api.md#importtodatasetsource-options).
+- **Export** (JSON-stat → columnar): `readDataset` flattens the cube to the IR; `cubeToArrow` handles Arrow-native targets (Parquet, DuckDB, Polars); `cubeToCsv` / `cubeToCsvw` / `cubeToCsvstat` / `cubeToDataPackage` handle text targets. Exposed via [`exportDataset`](./api.md#exportdatasetdataset-options).
+- **CLI:** the `--to` flag drives direction — `jsonstat` (default) imports; `arrow|parquet|csv|csvw|jsv|datapackage` exports.
 
 The same Observations IR sits at the center of both directions, guaranteeing that `export → import` round-trips losslessly.
 

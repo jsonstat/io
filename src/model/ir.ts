@@ -94,12 +94,13 @@ export type RoleMap = JsonStatRole;
  * Dataset-level metadata carried alongside the observations.
  *
  * These fields map directly to top-level JSON-stat dataset properties
- * (`label`, `source`, `updated`, `extension`).
+ * (`label`, `source`, `updated`, `href`, `extension`).
  */
 export interface DatasetMeta {
   label?: string;
   source?: string;
   updated?: string;
+  href?: string;
   extension?: Record<string, unknown>;
 }
 

@@ -267,6 +267,7 @@ export function readDataset(
         label: dataset.label,
         source: dataset.source,
         updated: dataset.updated,
+        href: dataset.href,
         extension: dataset.extension ? { ...dataset.extension } : undefined,
       },
       // Preserve the original value form so a round-trip is byte-stable when

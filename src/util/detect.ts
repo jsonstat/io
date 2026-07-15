@@ -17,6 +17,7 @@ export type SourceFormat =
   | "arrow"
   | "csv"
   | "csvw"
+  | "jsv"
   | "datapackage"
   | "jsonstat"
   | "json"
@@ -64,6 +65,10 @@ export function detectFromBytes(bytes: Uint8Array | ArrayBuffer): SourceFormat {
     }
     return "json";
   }
+  // CSV-stat (JSV): first line starts with the `jsonstat,` tag.
+  if (text.startsWith("jsonstat,") || text.startsWith("jsonstat\r") || text.startsWith("jsonstat\n")) {
+    return "jsv";
+  }
   // CSV: presence of a delimiter and typical header-ish content is weak; defer
   // to extension if available. Mark as "csv" only as a fallback guess.
   if (text.includes(",") || text.includes(";") || text.includes("\t")) return "csv";
@@ -89,6 +94,10 @@ export function detectFromExtension(ext: string): SourceFormat {
     case "csvw":
     case "csv-metadata":
       return "csvw";
+    case "jsv":
+    case "csvstat":
+    case "csv-stat":
+      return "jsv";
     case "datapackage":
     case "data-package":
     case "fdp":

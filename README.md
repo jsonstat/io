@@ -1,6 +1,6 @@
 # jsonstat-io
 
-> Convert between [JSON-stat 2.0](https://jsonstat.org/) cubes and the columnar stack — Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, and Frictionless Data Package. An Arrow-bridged, bidirectional interop layer for the lakehouse ecosystem.
+> Convert between [JSON-stat 2.0](https://jsonstat.org/) cubes and the columnar stack — Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, CSV-stat, and Frictionless Data Package. An Arrow-bridged, bidirectional interop layer for the lakehouse ecosystem.
 
 `jsonstat-io` bridges the **columnar stack** — Arrow, Parquet, DuckDB, Polars — and the **JSON-stat statistical format** in a single, dependency-light package. Because Parquet, DuckDB, and Polars all emit Apache Arrow tables natively, one conversion path serves them all in **both directions**:
 
@@ -71,7 +71,7 @@ dp.metadata;   // DataPackageMetadata — the datapackage.json descriptor
 
 ### CLI
 
-The `--to` flag drives direction: `jsonstat` (default) imports; `arrow|parquet|csv|csvw|datapackage` exports. The `--from` flag forces the import format (`arrow|parquet|csv|csvw|datapackage`).
+The `--to` flag drives direction: `jsonstat` (default) imports; `arrow|parquet|csv|csvw|jsv|datapackage` exports. The `--from` flag forces the import format (`arrow|parquet|csv|csvw|jsv|datapackage`).
 
 ```sh
 # IMPORT: file → JSON-stat, written to stdout
@@ -102,6 +102,7 @@ See [`docs/cli.md`](./docs/cli.md) for the full CLI reference.
 | Arrow IPC      | ✅ (it *is* Arrow)| [`/arrow`](./docs/formats/arrow.md)    | [`/arrow`](./docs/formats/arrow.md)    |
 | CSVW           | ❌ → IR directly  | [`/csvw`](./docs/formats/csvw.md)      | [`/csvw`](./docs/formats/csvw.md)      |
 | Plain CSV      | ❌ → IR directly  | [`/csv`](./docs/formats/csv.md)        | [`/csv`](./docs/formats/csv.md)        |
+| CSV-stat (JSV) | ❌ → IR directly  | [`/csv-stat`](./docs/formats/csv-stat.md) | [`/csv-stat`](./docs/formats/csv-stat.md) |
 | Data Package   | ❌ → IR directly  | [`/datapackage`](./docs/formats/datapackage.md) | [`/datapackage`](./docs/formats/datapackage.md) |
 
 Every Arrow-producing format funnels through **one** `arrowToCube` / `cubeToArrow` pair. This means the JSON-stat mapping logic (dimensions, roles, sparse/dense, status) is implemented and tested exactly once per direction, then reused. Adding a new Arrow-native format is a ~30-line adapter.
@@ -153,7 +154,7 @@ src/
 │   ├── arrowToCube.ts  # Arrow Table → Observations IR (import)
 │   └── arrowFromCube.ts# Observations IR → Arrow Table (export)
 ├── sources/        # Per-format adapters (optional peers, lazy, bidirectional)
-│   ├── parquet.ts  duckdb.ts  polars.ts  csvw.ts  csv.ts  datapackage.ts
+│   ├── parquet.ts  duckdb.ts  polars.ts  csvw.ts  csv.ts  csvstat.ts  datapackage.ts
 ├── browser/        # IIFE-bundle shims: arrow-global.ts (UMD global), peer-stub.ts
 ├── sink/           # serialize.ts — JSON-stat → canonical JSON string/bytes
 ├── util/           # detect.ts (format sniffing), fetch.ts (loading), density.ts
@@ -184,7 +185,7 @@ See [`docs/mapping.md`](./docs/mapping.md) for the complete fidelity table.
 | DuckDB (wasm)           | ✅       | ✅      |
 | DuckDB (native)         | ✅       | —       |
 | Polars                  | ✅       | —       |
-| CSVW / CSV              | ✅       | ✅      |
+| CSVW / CSV / JSV        | ✅       | ✅      |
 | Data Package            | ✅       | ✅      |
 | CLI                     | ✅       | —       |
 | File paths / stdin      | ✅       | —       |
@@ -202,8 +203,8 @@ Clean URLs, no `/dist` — resolvers like [esm.sh](https://esm.sh) follow the
 
 ```html
 <script type="module">
-  import { importToDataset } from "https://esm.sh/jsonstat-io@0.2.0";
-  import { csvToCube } from "https://esm.sh/jsonstat-io@0.2.0/csv";
+  import { importToDataset } from "https://esm.sh/jsonstat-io@0.3.0";
+  import { csvToCube } from "https://esm.sh/jsonstat-io@0.3.0/csv";
   // …
 </script>
 ```
@@ -218,7 +219,7 @@ Arrow is shared and cached for every consumer on the page:
 <!-- 1. apache-arrow UMD first — defines window.Arrow -->
 <script src="https://cdn.jsdelivr.net/npm/apache-arrow@17"></script>
 <!-- 2. jsonstat-io IIFE second — attaches window.JSONstatIo -->
-<script src="https://cdn.jsdelivr.net/npm/jsonstat-io@0.2.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsonstat-io@0.3.0"></script>
 <script>
   const { importToDataset, exportDataset } = window.JSONstatIo;
   // …
@@ -229,7 +230,7 @@ Arrow is shared and cached for every consumer on the page:
 
 ```html
 <script src="https://unpkg.com/apache-arrow@17"></script>
-<script src="https://unpkg.com/jsonstat-io@0.2.0"></script>
+<script src="https://unpkg.com/jsonstat-io@0.3.0"></script>
 ```
 
 > The apache-arrow major (17) must match the version `jsonstat-io` was built
@@ -246,7 +247,7 @@ Arrow is shared and cached for every consumer on the page:
 
 ## Testing
 
-189 tests cover the stride math, cube builder/reader, Arrow hub round-trips, JSON-stat round-trips, export round-trips (Arrow, CSV, CSVW, Parquet, Data Package), format detection, density decisions, the default-measure rule, serialization, and CLI argument parsing:
+204 tests cover the stride math, cube builder/reader, Arrow hub round-trips, JSON-stat round-trips, export round-trips (Arrow, CSV, CSVW, CSV-stat, Parquet, Data Package), format detection, density decisions, the default-measure rule, serialization, and CLI argument parsing:
 
 ```sh
 npm test          # vitest run

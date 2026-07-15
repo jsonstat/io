@@ -13,7 +13,7 @@ Convert between columnar data (Arrow, Parquet, DuckDB, Polars, CSVW, CSV, Data P
 
 Arguments:
   input                    Input file path, URL, or "-" for stdin (default: "-").
-                           Supports .parquet, .arrow/.ipc, .csv, .csvw,
+                           Supports .parquet, .arrow/.ipc, .csv, .csvw, .jsv/.csvstat,
                            .datapackage/.datapackage.json/.json (with a `resources[]`
                            shape), .json/.jsonstat.
 
@@ -28,6 +28,7 @@ Format:
                              arrow          — Arrow IPC stream/file
                              csv            — plain CSV (heuristic mapping)
                              csvw           — CSV with metadata
+                             jsv            — CSV-stat (JSV): CSV with inline metadata header
                              datapackage    — Frictionless Data Package descriptor
                              jsonstat, json — JSON-stat input (round-trip)
   -t, --to <format>        Output format / direction. One of:
@@ -36,6 +37,7 @@ Format:
                              parquet            — EXPORT: JSON-stat → Parquet (needs parquet-wasm)
                              csv                — EXPORT: JSON-stat → CSV
                              csvw               — EXPORT: JSON-stat → CSV + CSVW metadata
+                             jsv                — EXPORT: JSON-stat → CSV-stat (JSV) text
                              datapackage        — EXPORT: JSON-stat → CSV + Data Package descriptor
 
 Column mapping:
@@ -182,6 +184,7 @@ When `--from` is omitted (or `auto`), the CLI:
    - `.arrow` / `.ipc` / `.feather` → Arrow IPC
    - `.csv` → CSV (with sibling lookup, see step 3)
    - `.csvw` / `.csv-metadata` → CSVW
+   - `.jsv` / `.csvstat` → CSV-stat (JSV)
    - `.datapackage` / `.data-package` / `.fdp` → Data Package
    - `.json` / `.jsonstat` / `.json-stat` → JSON-stat
 3. For `.csv`, tries to load a sibling `*-metadata.json` (CSVW convention). If found, uses CSVW; otherwise plain CSV.

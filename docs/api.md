@@ -49,6 +49,7 @@ Extends `ArrowToCubeOptions`:
 | `datapackageResourcePath` | `string`                    | —           | Pick the resource whose `path`/`name` matches |
 | `datapackageResourceIndex` | `number`                    | —           | Pick the resource by 0-based index |
 | `delimiter`       | `string`                          | `","`       | CSV delimiter |
+| `decimal`         | `string`                          | —           | Decimal mark override (JSV: overrides the `jsonstat` line) |
 | `measure`         | `string`                          | *(detected)*| Measure column name |
 | `dimensions`      | `string[]`                        | *(detected)*| Dimension column names |
 | `status`          | `string`                          | *(detected)*| Status column name |
@@ -85,6 +86,9 @@ const bytes = await exportDataset(dataset, { to: "parquet" });
 // → CSV text
 const csv = await exportDataset(dataset, { to: "csv" });
 
+// → CSV-stat (JSV) text — CSV with inline metadata header
+const jsv = await exportDataset(dataset, { to: "jsv" });
+
 // → CSV text + CSVW metadata object
 const { csv, metadata } = await exportDataset(dataset, { to: "csvw" });
 
@@ -92,20 +96,20 @@ const { csv, metadata } = await exportDataset(dataset, { to: "csvw" });
 const dp = await exportDataset(dataset, { to: "datapackage" });
 ```
 
-Flattens a JSON-stat dataset to the Observations IR via `readDataset`, then converts to the requested target format. Arrow-native targets (parquet) funnel through `cubeToArrow`; text targets (csv, csvw, datapackage) serialize directly from the IR.
+Flattens a JSON-stat dataset to the Observations IR via `readDataset`, then converts to the requested target format. Arrow-native targets (parquet) funnel through `cubeToArrow`; text targets (csv, jsv, csvw, datapackage) serialize directly from the IR.
 
 **Parameters:**
 - `dataset: JsonStatDataset` — the input JSON-stat dataset.
 - `options: ExportOptions` — `{ to, ...format-specific options }`.
 
-**Returns:** `Promise<ExportResult>` — an Arrow `Table` (`to: "arrow"`), a `Uint8Array` (`to: "parquet"`), a `string` (`to: "csv"`), or a `{ csv, metadata }` object (`to: "csvw"` or `to: "datapackage"`).
+**Returns:** `Promise<ExportResult>` — an Arrow `Table` (`to: "arrow"`), a `Uint8Array` (`to: "parquet"`), a `string` (`to: "csv"` or `to: "jsv"`), or a `{ csv, metadata }` object (`to: "csvw"` or `to: "datapackage"`).
 
 ### `ExportOptions`
 
 | Field    | Type                                | Description |
 |----------|-------------------------------------|-------------|
-| `to`     | `ExportTarget`                      | `"arrow"` \| `"parquet"` \| `"csv"` \| `"csvw"` \| `"datapackage"` |
-| *(format-specific)* | varies                | Passed through to the target adapter (e.g. `compression` for parquet, `delimiter` for csv) |
+| `to`     | `ExportTarget`                      | `"arrow"` \| `"parquet"` \| `"csv"` \| `"csvw"` \| `"jsv"` \| `"datapackage"` |
+| *(format-specific)* | varies                | Passed through to the target adapter (e.g. `compression` for parquet, `delimiter` for csv, `decimal` for jsv) |
 
 ---
 
@@ -289,6 +293,21 @@ const csv = cubeToCsv(obs);
 
 No dependencies. Heuristic measure/dimension inference on import.
 
+### `jsonstat-io/jsv`
+
+```ts
+import { csvstatToCube, cubeToCsvstat } from "jsonstat-io/jsv";
+
+const obs = csvstatToCube(jsvText, { decimal: "," });
+
+// Export: IR → CSV-stat (JSV) text
+const jsv = cubeToCsvstat(obs);
+```
+
+No dependencies. CSV with an inline metadata header (dimensions, roles,
+category labels/units, status, dataset `label`/`source`/`updated`/`href`) for
+a lossless, single-file round-trip. See [`formats/csv-stat.md`](./formats/csv-stat.md).
+
 ---
 
 ## Sink
@@ -353,6 +372,7 @@ decideDensity(0.6, 0.5);  // { form: "sparse", nullRatio: 0.6, threshold: 0.5 }
 | `PolarsSourceError`   | `polarsToCube` |
 | `CsvwSourceError`     | `csvwToCube` |
 | `CsvSourceError`      | `csvToCube` |
+| `CsvStatSourceError`  | `csvstatToCube` |
 | `DataPackageSourceError` | `datapackageToCube` |
 
 All extend `Error` and set `this.name` to the class name.

@@ -157,9 +157,10 @@ import type { DataPackageMetadata } from "./sources/datapackage";
 export interface ImportOptions extends ArrowToCubeOptions {
   /**
    * Force a source format instead of auto-detecting. One of `"parquet"`,
-   * `"arrow"`, `"csv"`, `"csvw"`, `"datapackage"`, `"jsonstat"`, `"json"`.
-   * When omitted the format is sniffed from magic bytes (Parquet `PAR1`,
-   * Arrow IPC `ARROW1`) and then from the file extension.
+   * `"arrow"`, `"csv"`, `"csvw"`, `"jsv"`, `"datapackage"`, `"jsonstat"`,
+   * `"json"`. When omitted the format is sniffed from magic bytes (Parquet
+   * `PAR1`, Arrow IPC `ARROW1`, CSV-stat `jsonstat,`) and then from the file
+   * extension.
    */
   from?: SourceFormat | "auto";
   /** Passed through to [`buildDataset`](./core/cubeBuilder.ts) as `BuildOptions`. */
@@ -192,9 +193,14 @@ export interface ImportOptions extends ArrowToCubeOptions {
    */
   datapackageResourceIndex?: number;
   /**
-   * CSV delimiter (default `,`). Only used when the source is plain CSV.
+   * CSV delimiter (default `,`). Used for plain CSV, CSVW and CSV-stat (JSV).
    */
   delimiter?: string;
+  /**
+   * CSV-stat (JSV) decimal delimiter override. By default it is read from the
+   * `jsonstat` line's first content column (falling back to `.`).
+   */
+  decimal?: string;
 }
 
 /**
@@ -270,6 +276,15 @@ export async function importToCube(
         status: options.status,
         roles: options.roles,
         delimiter: options.delimiter,
+      });
+    }
+
+    case "jsv": {
+      const { csvstatToCube } = await import("./sources/csvstat");
+      const text = new TextDecoder().decode(loaded.bytes);
+      return csvstatToCube(text, {
+        delimiter: options.delimiter,
+        decimal: options.decimal,
       });
     }
 
@@ -430,7 +445,13 @@ function resolveSibling(basePath: string, relative: string): string {
 // ---------------------------------------------------------------------------
 
 /** Supported export sinks for [`exportDataset`](#exportdataset). */
-export type ExportTarget = "arrow" | "parquet" | "csv" | "csvw" | "datapackage";
+export type ExportTarget =
+  | "arrow"
+  | "parquet"
+  | "csv"
+  | "csvw"
+  | "jsv"
+  | "datapackage";
 
 /**
  * Options for [`exportDataset`](#exportdataset).
@@ -449,8 +470,12 @@ export interface ExportOptions {
   delimiter?: string;
   /** CSVW metadata `url` field. */
   url?: string;
-  /** Line terminator for CSV / CSVW / Data Package output (default "\r\n"). */
+  /** Line terminator for CSV / CSVW / CSV-stat / Data Package output (default "\r\n"). */
   lineTerminator?: string;
+  /** CSV-stat (JSV) decimal delimiter written to the `jsonstat` line (default "."). */
+  decimal?: string;
+  /** CSV-stat (JSV) unit separator written to the `jsonstat` line (default "|"). */
+  unitSep?: string;
   /**
    * Data Package resource `path` (the CSV file the descriptor references).
    * Defaults to `"data.csv"`. Data Package export only.
@@ -473,6 +498,7 @@ export interface ExportOptions {
  * - `"parquet"` → a `Uint8Array` of the Parquet file bytes.
  * - `"csv"` → the CSV text (`string`).
  * - `"csvw"` → `{ csv: string; metadata: CsvwMetadata }`.
+ * - `"jsv"` → the CSV-stat (JSV) text (`string`).
  * - `"datapackage"` → `{ csv: string; metadata: DataPackageMetadata }`.
  */
 export type ExportResult =
@@ -552,6 +578,15 @@ export async function exportDataset(
         url: options.url,
       });
     }
+    case "jsv": {
+      const { cubeToCsvstat } = await import("./sources/csvstat");
+      return cubeToCsvstat(obs, {
+        delimiter: options.delimiter,
+        decimal: options.decimal,
+        unitSep: options.unitSep,
+        lineTerminator: options.lineTerminator,
+      });
+    }
     case "datapackage": {
       const { cubeToDataPackage } = await import("./sources/datapackage");
       return cubeToDataPackage(obs, {
@@ -564,7 +599,7 @@ export async function exportDataset(
     default:
       throw new ImporterError(
         `Unsupported export target "${(options as { to?: string }).to}". ` +
-          'Use one of: "arrow", "parquet", "csv", "csvw", "datapackage". ' +
+          'Use one of: "arrow", "parquet", "csv", "csvw", "jsv", "datapackage". ' +
           "For DuckDB/Polars, use the dedicated subpath writers.",
       );
   }

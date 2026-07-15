@@ -113,21 +113,21 @@ function createProgram(): Command {
   program
     .name("jsonstat-io")
     .description(
-      "Bidirectional bridge between JSON-stat 2.0 and the columnar stack (Arrow, Parquet, DuckDB, Polars, CSVW, CSV, Data Package).",
+      "Bidirectional bridge between JSON-stat 2.0 and the columnar stack (Arrow, Parquet, DuckDB, Polars, CSVW, CSV, CSV-stat/JSV, Data Package).",
     )
     .version(VERSION)
     .argument(
       "[input]",
-      'Input file path, URL, or "-" for stdin (default). Supports .parquet, .arrow/.ipc, .csv, .csvw, .datapackage, .json/.jsonstat.',
+      'Input file path, URL, or "-" for stdin (default). Supports .parquet, .arrow/.ipc, .csv, .csvw, .jsv/.csvstat, .datapackage, .json/.jsonstat.',
       "-",
     )
     .option(
       "-f, --from <format>",
-      "Source format: auto (default), parquet, arrow, csv, csvw, datapackage, jsonstat, json",
+      "Source format: auto (default), parquet, arrow, csv, csvw, jsv, datapackage, jsonstat, json",
     )
     .option(
       "-t, --to <format>",
-      "Output format: jsonstat (default) = import; arrow, parquet, csv, csvw, datapackage = export.",
+      "Output format: jsonstat (default) = import; arrow, parquet, csv, csvw, jsv, datapackage = export.",
       "jsonstat",
     )
     .option("--measure <column>", "Name of the measure column (overrides detection)")
@@ -292,7 +292,7 @@ async function runExport(
   try {
     const result = await exportDataset(dataset, { to });
 
-    if (to === "csv") {
+    if (to === "csv" || to === "jsv") {
       const text = result as string;
       await writeOutput(text, parsed.output);
       return { direction: "export", dataset, to, text, validationErrors: [] };

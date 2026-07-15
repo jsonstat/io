@@ -41,7 +41,7 @@ export interface RawCliOptions {
 
 /** Parsed CLI options, ready to feed into `importToDataset` + `serialize`. */
 export interface ParsedCliOptions {
-  /** Output target: `jsonstat` = import (default); `arrow|parquet|csv|csvw` = export. */
+  /** Output target: `jsonstat` = import (default); `arrow|parquet|csv|csvw|jsv|datapackage` = export. */
   to: string;
   importOptions: ImportOptions;
   buildOptions: BuildOptions;
@@ -61,6 +61,7 @@ const ALLOWED_FROM: ReadonlySet<string> = new Set([
   "arrow",
   "csv",
   "csvw",
+  "jsv",
   "datapackage",
   "jsonstat",
   "json",
@@ -72,6 +73,7 @@ const ALLOWED_TO: ReadonlySet<string> = new Set([
   "parquet",
   "csv",
   "csvw",
+  "jsv",
   "datapackage",
 ]);
 

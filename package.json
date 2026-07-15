@@ -1,7 +1,7 @@
 {
   "name": "jsonstat-io",
-  "version": "0.2.0",
-  "description": "Bidirectional bridge between the columnar stack (Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, Data Package) and JSON-stat 2.0 cubes. An Arrow-hubbed interop layer for the lakehouse ecosystem.",
+  "version": "0.3.0",
+  "description": "Bidirectional bridge between the columnar stack (Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, CSV-stat, Data Package) and JSON-stat 2.0 cubes. An Arrow-hubbed interop layer for the lakehouse ecosystem.",
   "license": "Apache-2.0",
   "author": "Xavier Badosa",
   "homepage": "https://github.com/jsonstat/io#readme",
@@ -21,6 +21,8 @@
     "duckdb",
     "polars",
     "csvw",
+    "csv-stat",
+    "jsv",
     "datapackage",
     "frictionless",
     "data-package",
@@ -70,6 +72,11 @@
       "types": "./dist/sources/csv.d.ts",
       "import": "./dist/sources/csv.js",
       "require": "./dist/sources/csv.cjs"
+    },
+    "./jsv": {
+      "types": "./dist/sources/csvstat.d.ts",
+      "import": "./dist/sources/csvstat.js",
+      "require": "./dist/sources/csvstat.cjs"
     },
     "./datapackage": {
       "types": "./dist/sources/datapackage.d.ts",
