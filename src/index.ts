@@ -145,6 +145,7 @@ import { arrowToCube } from "./arrow/arrowToCube";
 import { cubeToArrow } from "./arrow/arrowFromCube";
 import type { ArrowToCubeOptions } from "./arrow/arrowToCube";
 import type { CsvwMetadata } from "./sources/csvw";
+import type { DataPackageMetadata } from "./sources/datapackage";
 
 /**
  * Options for the high-level [`importToCube`](#importtocube) /
@@ -156,9 +157,9 @@ import type { CsvwMetadata } from "./sources/csvw";
 export interface ImportOptions extends ArrowToCubeOptions {
   /**
    * Force a source format instead of auto-detecting. One of `"parquet"`,
-   * `"arrow"`, `"csv"`, `"csvw"`, `"jsonstat"`, `"json"`. When omitted the
-   * format is sniffed from magic bytes (Parquet `PAR1`, Arrow IPC `ARROW1`)
-   * and then from the file extension.
+   * `"arrow"`, `"csv"`, `"csvw"`, `"datapackage"`, `"jsonstat"`, `"json"`.
+   * When omitted the format is sniffed from magic bytes (Parquet `PAR1`,
+   * Arrow IPC `ARROW1`) and then from the file extension.
    */
   from?: SourceFormat | "auto";
   /** Passed through to [`buildDataset`](./core/cubeBuilder.ts) as `BuildOptions`. */
@@ -169,6 +170,27 @@ export interface ImportOptions extends ArrowToCubeOptions {
    * to the CSV path (Node only). In the browser the caller must supply it.
    */
   csvwMetadata?: unknown;
+  /**
+   * Data Package descriptor, when the source is a Data Package. Two modes:
+   *
+   * - **Omitted** (default): the *source* is the `datapackage.json` descriptor
+   *   itself. The dispatcher parses it, resolves the resource's CSV `path`
+   *   relative to the descriptor location (Node or URL), loads it, and reads.
+   *   Resources with inline `data` need no CSV.
+   * - **Provided**: the *source* is the CSV body and this option carries the
+   *   descriptor (mirrors the CSVW `csvwMetadata` convention).
+   */
+  datapackageMetadata?: unknown;
+  /**
+   * Select a specific resource by its `path` in a multi-resource package
+   * (Data Package only). Defaults to the first resource.
+   */
+  datapackageResourcePath?: string;
+  /**
+   * Select a specific resource by zero-based index in a multi-resource package
+   * (Data Package only). Defaults to `0` (the first resource).
+   */
+  datapackageResourceIndex?: number;
   /**
    * CSV delimiter (default `,`). Only used when the source is plain CSV.
    */
@@ -286,6 +308,60 @@ export async function importToCube(
       });
     }
 
+    case "datapackage": {
+      const { datapackageToCube, parseDataPackageMetadata, selectResource } =
+        await import("./sources/datapackage");
+      let metadata: DataPackageMetadata;
+      let csvText: string | undefined;
+      if (options.datapackageMetadata !== undefined) {
+        // Caller supplied the descriptor; loaded bytes are the CSV body.
+        metadata = parseDataPackageMetadata(options.datapackageMetadata);
+        csvText = new TextDecoder().decode(loaded.bytes);
+      } else {
+        // Loaded bytes ARE the descriptor (the datapackage.json convention).
+        metadata = parseDataPackageMetadata(
+          JSON.parse(new TextDecoder().decode(loaded.bytes)),
+        );
+      }
+      const resourceOpts = {
+        resourcePath: options.datapackageResourcePath,
+        resourceIndex: options.datapackageResourceIndex,
+      };
+      const adapterOpts = {
+        measure: options.measure,
+        dimensions: options.dimensions,
+        status: options.status,
+        roles: options.roles,
+        ...resourceOpts,
+        delimiter: options.delimiter,
+      };
+      // Inline data needs no CSV load.
+      const resource = selectResource(metadata, resourceOpts);
+      if (!(resource.data && resource.data.length > 0)) {
+        if (csvText === undefined) {
+          if (!resource.path) {
+            throw new ImporterError(
+              "Data Package resource has no `path` and no inline `data`. " +
+                "Pass options.datapackageMetadata (with the CSV as the source) " +
+                "or ensure the resource declares a `path`.",
+            );
+          }
+          if (!loaded.source) {
+            throw new ImporterError(
+              "Cannot resolve the resource's relative `path` without a " +
+                "descriptor source path. Pass the datapackage.json path/URL " +
+                "as the source, or supply the CSV as the source with " +
+                "options.datapackageMetadata.",
+            );
+          }
+          const csvPath = resolveSibling(loaded.source, resource.path);
+          const csvBytes = await loadInput(csvPath);
+          csvText = new TextDecoder().decode(csvBytes.bytes);
+        }
+      }
+      return datapackageToCube(csvText ?? "", metadata, adapterOpts);
+    }
+
     case "jsonstat":
     case "json": {
       // A JSON-stat input: read it back into the IR via the cube reader.
@@ -330,12 +406,31 @@ function siblingMetadataPath(csvPath: string): string {
   return `${base}-metadata.json`;
 }
 
+/**
+ * Resolve a relative resource path against a descriptor base (file path or URL).
+ *
+ * Used by the Data Package import path to locate the CSV a resource points at:
+ * `data/datapackage.json` + `sales.csv` → `data/sales.csv`.
+ */
+function resolveSibling(basePath: string, relative: string): string {
+  if (/^https?:\/\//i.test(basePath)) {
+    try {
+      return new URL(relative, basePath).href;
+    } catch {
+      // Fall through to the string manipulation below.
+    }
+  }
+  const slash = basePath.lastIndexOf("/");
+  const dir = slash >= 0 ? basePath.slice(0, slash + 1) : "";
+  return dir + relative;
+}
+
 // ---------------------------------------------------------------------------
 // High-level convenience: JSON-stat → columnar (export / Phase 2)
 // ---------------------------------------------------------------------------
 
 /** Supported export sinks for [`exportDataset`](#exportdataset). */
-export type ExportTarget = "arrow" | "parquet" | "csv" | "csvw";
+export type ExportTarget = "arrow" | "parquet" | "csv" | "csvw" | "datapackage";
 
 /**
  * Options for [`exportDataset`](#exportdataset).
@@ -354,8 +449,18 @@ export interface ExportOptions {
   delimiter?: string;
   /** CSVW metadata `url` field. */
   url?: string;
-  /** Line terminator for CSV / CSVW output (default "\r\n"). */
+  /** Line terminator for CSV / CSVW / Data Package output (default "\r\n"). */
   lineTerminator?: string;
+  /**
+   * Data Package resource `path` (the CSV file the descriptor references).
+   * Defaults to `"data.csv"`. Data Package export only.
+   */
+  datapackagePath?: string;
+  /**
+   * Data Package `name` slug. Defaults to a slug of the dataset label.
+   * Data Package export only.
+   */
+  datapackageName?: string;
   /** Async initializer for parquet-wasm (browser base URL, etc.). */
   init?: () => Promise<void>;
 }
@@ -368,11 +473,23 @@ export interface ExportOptions {
  * - `"parquet"` → a `Uint8Array` of the Parquet file bytes.
  * - `"csv"` → the CSV text (`string`).
  * - `"csvw"` → `{ csv: string; metadata: CsvwMetadata }`.
+ * - `"datapackage"` → `{ csv: string; metadata: DataPackageMetadata }`.
  */
-export type ExportResult = Table | Uint8Array | string | CsvwExportShape;
+export type ExportResult =
+  | Table
+  | Uint8Array
+  | string
+  | CsvwExportShape
+  | DataPackageExportShape;
 
 /** Shape of the `"csvw"` export result (mirrors `csvw.CsvwExport`). */
 export interface CsvwExportShape {
+  csv: string;
+  metadata: unknown;
+}
+
+/** Shape of the `"datapackage"` export result. */
+export interface DataPackageExportShape {
   csv: string;
   metadata: unknown;
 }
@@ -389,6 +506,7 @@ export interface CsvwExportShape {
  * - `"parquet"` → Arrow → `parquet-wasm` `writeParquet` → `Uint8Array`.
  * - `"csv"`    → [`cubeToCsv`](./sources/csv.ts) → CSV text.
  * - `"csvw"`   → [`cubeToCsvw`](./sources/csvw.ts) → `{ csv, metadata }`.
+ * - `"datapackage"` → [`cubeToDataPackage`](./sources/datapackage.ts) → `{ csv, metadata }`.
  *
  * DuckDB and Polars require a live connection / native module and are not
  * reachable from this dispatcher — use the dedicated subpath writers
@@ -434,10 +552,19 @@ export async function exportDataset(
         url: options.url,
       });
     }
+    case "datapackage": {
+      const { cubeToDataPackage } = await import("./sources/datapackage");
+      return cubeToDataPackage(obs, {
+        delimiter: options.delimiter,
+        lineTerminator: options.lineTerminator,
+        path: options.datapackagePath,
+        name: options.datapackageName,
+      });
+    }
     default:
       throw new ImporterError(
         `Unsupported export target "${(options as { to?: string }).to}". ` +
-          'Use one of: "arrow", "parquet", "csv", "csvw". ' +
+          'Use one of: "arrow", "parquet", "csv", "csvw", "datapackage". ' +
           "For DuckDB/Polars, use the dedicated subpath writers.",
       );
   }

@@ -11,8 +11,9 @@
  * ## Mapping heuristics (no metadata)
  *
  * Without a schema, the adapter infers:
- *  - The **measure** is the first column that parses as a number for every
- *    non-empty row (or the one named by `options.measure`).
+ *  - The **measure** is the column named by `options.measure`; failing that,
+ *    a column literally named `value` (case-insensitive); failing that, the
+ *    first column that parses as a number for every non-empty row.
  *  - Every other column is a **dimension** (string-typed), in file order.
  *  - A column named `status` (case-insensitive) is treated as the status
  *    column unless `options.status` overrides it.
@@ -172,15 +173,20 @@ export function csvToCube(text: string, options: CsvToCubeOptions = {}): Observa
     for (let c = 0; c < colCount; c++) columns[c].push(r[c] ?? "");
   }
 
-  // Resolve measure column.
+  // Resolve measure column. Precedence: explicit option.measure > a column
+  // named "value" (case-insensitive) > first all-numeric column (inference).
   let measureIdx = headerNames.findIndex((n) => n === options.measure);
+  if (measureIdx === -1 && !options.measure) {
+    measureIdx = headerNames.findIndex((n) => n.toLowerCase() === "value");
+  }
   if (measureIdx === -1) {
     // Inference: first all-numeric column.
     measureIdx = columns.findIndex((col) => isAllNumeric(col));
     if (measureIdx === -1) {
       throw new CsvSourceError(
-        "No measure column found: no column is fully numeric. " +
-          "Pass options.measure to name one (values will be parsed with Number()).",
+        "No measure column found: no column is named 'value' or is fully " +
+          "numeric. Pass options.measure to name one (values will be parsed " +
+          "with Number()).",
       );
     }
   }

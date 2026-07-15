@@ -1,6 +1,6 @@
 /**
  * Shared test fixtures — IR observations and canonical JSON-stat datasets
- * derived from the official JSON-stat sample suite (see wiki/sample-files.md).
+ * derived from the official JSON-stat sample suite (https://jsonstat.org/format/).
  *
  * These are compact, hand-verified mini-cubes that exercise the key structural
  * features without the verbosity of the full upstream samples.

@@ -19,7 +19,12 @@ const dataset = await importToDataset("./data.csv", { from: "csv", measure: "amo
 
 Without a schema, the adapter infers:
 
-1. The **measure** is the first column that parses as a number for every non-empty row — or the one named by `options.measure`.
+1. The **measure** is resolved with this precedence:
+   - the column named by `options.measure`, if set; otherwise
+   - a column named `value` (case-insensitive) — this is the **default measure**; otherwise
+   - the first column that parses as a number for every non-empty row (numeric inference).
+
+   So a tidy CSV with a `value` column needs no `--measure`/`options.measure` at all. The canonical tidy form `…,status,value` (dimensions, then status, then measure) imports cleanly out of the box.
 2. A column named `status` (case-insensitive) is the **status** column — unless `options.status` overrides it.
 3. Every other column is a **dimension** (string-typed), in file order.
 

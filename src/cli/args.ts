@@ -35,6 +35,7 @@ export interface RawCliOptions {
   canonicalKeys?: boolean;
   noCanonicalKeys?: boolean;
   csvwMetadata?: string;
+  datapackageMetadata?: string;
   delimiter?: string;
 }
 
@@ -60,6 +61,7 @@ const ALLOWED_FROM: ReadonlySet<string> = new Set([
   "arrow",
   "csv",
   "csvw",
+  "datapackage",
   "jsonstat",
   "json",
 ]);
@@ -70,6 +72,7 @@ const ALLOWED_TO: ReadonlySet<string> = new Set([
   "parquet",
   "csv",
   "csvw",
+  "datapackage",
 ]);
 
 const ALLOWED_STATUS_FORM: ReadonlySet<string> = new Set([
@@ -207,6 +210,9 @@ export function parseCliOptions(raw: RawCliOptions): ParsedCliOptions {
     delimiter: raw.delimiter,
     csvwMetadata: raw.csvwMetadata
       ? safeJsonParse(raw.csvwMetadata, "--csvw-metadata")
+      : undefined,
+    datapackageMetadata: raw.datapackageMetadata
+      ? safeJsonParse(raw.datapackageMetadata, "--datapackage-metadata")
       : undefined,
   };
 

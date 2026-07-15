@@ -113,21 +113,21 @@ function createProgram(): Command {
   program
     .name("jsonstat-io")
     .description(
-      "Bidirectional bridge between JSON-stat 2.0 and the columnar stack (Arrow, Parquet, DuckDB, Polars, CSVW, CSV).",
+      "Bidirectional bridge between JSON-stat 2.0 and the columnar stack (Arrow, Parquet, DuckDB, Polars, CSVW, CSV, Data Package).",
     )
     .version(VERSION)
     .argument(
       "[input]",
-      'Input file path, URL, or "-" for stdin (default). Supports .parquet, .arrow/.ipc, .csv, .csvw, .json/.jsonstat.',
+      'Input file path, URL, or "-" for stdin (default). Supports .parquet, .arrow/.ipc, .csv, .csvw, .datapackage, .json/.jsonstat.',
       "-",
     )
     .option(
       "-f, --from <format>",
-      "Source format: auto (default), parquet, arrow, csv, csvw, jsonstat, json",
+      "Source format: auto (default), parquet, arrow, csv, csvw, datapackage, jsonstat, json",
     )
     .option(
       "-t, --to <format>",
-      "Output format: jsonstat (default) = import; arrow, parquet, csv, csvw = export.",
+      "Output format: jsonstat (default) = import; arrow, parquet, csv, csvw, datapackage = export.",
       "jsonstat",
     )
     .option("--measure <column>", "Name of the measure column (overrides detection)")
@@ -155,6 +155,10 @@ function createProgram(): Command {
     .option("--canonical-keys", "Reorder top-level keys canonically (default: true)")
     .option("--no-canonical-keys", "Preserve source key order")
     .option("--csvw-metadata <json>", "Inline CSVW metadata as a JSON string")
+    .option(
+      "--datapackage-metadata <json>",
+      "Inline Data Package descriptor as a JSON string (source = CSV body)",
+    )
     .option("--delimiter <char>", 'CSV delimiter (default: ",")')
     .action(async (input: string, opts: RawCliOptions) => {
       await run(input, opts);
@@ -259,8 +263,8 @@ export async function run(
 
 /**
  * Import a JSON-stat source as a dataset, then export it via
- * [`exportDataset`](../index.ts) and write the result. Handles the four
- * `--to` targets: `arrow`, `parquet`, `csv`, `csvw`.
+ * [`exportDataset`](../index.ts) and write the result. Handles the five
+ * `--to` targets: `arrow`, `parquet`, `csv`, `csvw`, `datapackage`.
  */
 async function runExport(
   source: string,
@@ -315,6 +319,27 @@ async function runExport(
       }
       return { direction: "export", dataset, to, text: csv, validationErrors: [] };
     }
+    if (to === "datapackage") {
+      const { csv, metadata } = result as {
+        csv: string;
+        metadata: unknown;
+      };
+      // Write the CSV to -o (or stdout); write datapackage.json next to it.
+      await writeOutput(csv, parsed.output);
+      if (parsed.output && parsed.output !== "-") {
+        const metaPath = datapackageSibling(parsed.output);
+        await writeOutput(
+          JSON.stringify(metadata, null, 2),
+          metaPath,
+        );
+      } else {
+        const { stdout } = await import("node:process");
+        stdout.write("\n--- datapackage.json ---\n");
+        stdout.write(JSON.stringify(metadata, null, 2));
+        stdout.write("\n");
+      }
+      return { direction: "export", dataset, to, text: csv, validationErrors: [] };
+    }
     if (to === "parquet") {
       const bytes = result as Uint8Array;
       await writeBinaryOutput(bytes, parsed.output);
@@ -341,6 +366,13 @@ function csvwMetadataSibling(csvPath: string): string {
   const dot = csvPath.lastIndexOf(".");
   const base = dot > 0 ? csvPath.slice(0, dot) : csvPath;
   return `${base}-metadata.json`;
+}
+
+/** Derive the datapackage.json sibling path from a CSV output path. */
+function datapackageSibling(csvPath: string): string {
+  const slash = Math.max(csvPath.lastIndexOf("/"), csvPath.lastIndexOf("\\"));
+  const dir = slash >= 0 ? csvPath.slice(0, slash + 1) : "";
+  return `${dir}datapackage.json`;
 }
 
 // ---------------------------------------------------------------------------

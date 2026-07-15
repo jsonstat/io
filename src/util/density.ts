@@ -2,8 +2,8 @@
  * Density helper — sparse vs dense `value` decision.
  *
  * Centralizes the null-ratio threshold logic so the cube builder and tests
- * share one definition. See wiki/sparse-cubes.md for the rationale: the object
- * (sparse) form is preferred when many cells are null.
+ * share one definition. The object (sparse) `value` form is preferred when
+ * many cells are null; see https://jsonstat.org/format/ for the rationale.
  */
 
 export interface DensityResult {

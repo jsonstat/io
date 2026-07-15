@@ -64,9 +64,10 @@ Producers annotate Arrow `Field` and `Schema` metadata with `jsonstat.*` keys so
 
 **Detection order** (when metadata is absent):
 1. If `options.measure` is set, that column is the measure.
-2. Otherwise, the first `Float64`/`Float32`/`Int64`/`Int32` column is the measure.
-3. A column named `status` (case-insensitive) is the status column.
-4. All remaining columns are dimensions, in schema order.
+2. Otherwise, a column named `value` (case-insensitive) is the measure — this is the **default-measure rule** shared by the Arrow, CSV, CSVW, and Data Package adapters.
+3. Otherwise, the first `Float64`/`Float32`/`Int64`/`Int32` column is the measure.
+4. A column named `status` (case-insensitive) is the status column.
+5. All remaining columns are dimensions, in schema order.
 
 **Roles** (when metadata is absent):
 - A dimension named `year`, `date`, `time`, or `period` (case-insensitive) gets the `time` role.
@@ -131,6 +132,28 @@ CSVW metadata declares column types and roles explicitly:
 | `tableSchema.columns[].propertyUrl` containing `#time` / `#geo` | Role |
 | `tableSchema.primaryKey`         | Dimension columns (if no explicit dims) |
 
+The same default-measure rule applies: when no column matches the
+`datatype`-based measure detection, a column named `value` is the measure.
+
+## Data Package (Frictionless) field mapping
+
+A Frictionless Data Package descriptor declares a resource schema with typed
+fields. The adapter maps it like CSVW but uses JSON Table Schema vocabulary:
+
+| Data Package property              | Maps to                          |
+|------------------------------------|----------------------------------|
+| `resources[].schema.fields[].name` | Column name                      |
+| `resources[].schema.fields[].type` | Measure if `number`/`integer` (or named `value`) |
+| `resources[].schema.fields[].rdfType` (IRI ending in `#time` / `#geo`) | Role |
+| `resources[].schema.primaryKey`    | Dimension columns (if no explicit dims) |
+| `resources[].schema.fields[].jsonstat:*` | Role / labels / units (round-trip extension) |
+
+On export, `cubeToDataPackage` emits the inverse: a `fields[]` array where each
+dimension field carries an `rdfType` derived from its role, the measure field
+has `type: "number"`, and any JSON-stat-specific metadata (roles, valueForm,
+extension) is preserved under `jsonstat:*` keys for a lossless round-trip. See
+[`formats/datapackage.md`](./formats/datapackage.md) for the descriptor shape.
+
 ## Round-trip guarantee
 
-The test suite verifies that `readDataset` (JSON-stat → IR) followed by `buildDataset` (IR → JSON-stat) reproduces the original dataset's values, dimensions, roles, and status. The same guarantee holds for `arrowToCube` → `cubeToArrow` on the Arrow side, and for the full export round-trip: `export → bytes → import` returns the original dataset's values, dimensions, roles, and status. Any information loss in these round-trips is considered a bug.
+The test suite verifies that `readDataset` (JSON-stat → IR) followed by `buildDataset` (IR → JSON-stat) reproduces the original dataset's values, dimensions, roles, and status. The same guarantee holds for `arrowToCube` → `cubeToArrow` on the Arrow side, for the text adapters (`csvToCube` → `cubeToCsv`, `csvwToCube` → `cubeToCsvw`, `datapackageToCube` → `cubeToDataPackage`), and for the full export round-trip: `exportDataset → bytes/text → importToDataset` returns the original dataset's values, dimensions, roles, and status. Any information loss in these round-trips is considered a bug.

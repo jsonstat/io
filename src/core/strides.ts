@@ -3,8 +3,7 @@
  *
  * JSON-stat stores cell values in a flat array laid out in **row-major order**,
  * described by the spec as "what does not change, first": the *last* dimension
- * in `id` changes fastest (see wiki/format-specification.md and
- * wiki/sparse-cubes.md).
+ * in `id` changes fastest (see https://jsonstat.org/format/).
  *
  * Concretely, for dimensions with sizes `s₀, s₁, …, sₖ₋₁`, the flat position of
  * a cell at multi-index `(i₀, i₁, …, iₖ₋₁)` is:

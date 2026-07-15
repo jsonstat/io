@@ -4,7 +4,7 @@
  *
  * This is the central transform of the importer: a tidy long table → an
  * N-dimensional cube laid out in row-major order ("what does not change, first";
- * see wiki/format-specification.md).
+ * see https://jsonstat.org/format/).
  *
  * Responsibilities:
  *  1. Resolve dimension order and enumerate categories (first-seen order unless
@@ -195,7 +195,7 @@ function scatterValues(
 /**
  * Decide between dense (array) and sparse (object) `value` representation.
  *
- * Per wiki/sparse-cubes.md: sparse is preferred when many cells are null. The
+ * The object (sparse) `value` form is preferred when many cells are null. The
  * threshold is the null ratio above which the object form is more compact.
  */
 function chooseValueForm(

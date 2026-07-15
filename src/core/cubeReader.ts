@@ -9,10 +9,11 @@
  * reader is shipped in v0.1 for two reasons:
  *
  *  1. **Round-trip fidelity tests.** The canonical JSON-stat samples
- *     (oecd, canada, galicia, order, hierarchy, us-gsp, us-unr — see
- *     wiki/sample-files.md) are read into the IR, written back through the
- *     builder, and asserted equal. This is the strongest correctness proof we
- *     have that the importer faithfully preserves the JSON-stat model.
+ *     (oecd, canada, galicia, order, hierarchy, us-gsp, us-unr — from the
+ *     official sample suite at https://jsonstat.org/format/) are read into the
+ *     IR, written back through the builder, and asserted equal. This is the
+ *     strongest correctness proof we have that the importer faithfully
+ *     preserves the JSON-stat model.
  *
  *  2. **The Phase-2 export seam.** Export (JSON-stat → columnar) is
  *     `cubeReader` → IR → [`arrowFromCube`](../arrow/arrowFromCube.ts) →
@@ -23,8 +24,8 @@
  * ## Semantics
  *
  * The reader *materializes the dense cube* from `value` (handling both the
- * array form and the sparse object form — see wiki/sparse-cubes.md), then walks
- * every cell in row-major order ([`multiIndex`](./strides.ts)) to emit one
+ * array form and the sparse object form), then walks every cell in row-major
+ * order ([`multiIndex`](./strides.ts)) to emit one
  * observation per cell. Missing cells (`null`) are emitted as rows with a
  * `null` measure, preserving the full Cartesian product of categories — which
  * is what round-trip equality requires.

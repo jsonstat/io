@@ -9,11 +9,13 @@ npx jsonstat-io [input] [options]
 ```
 jsonstat-io [input] [options]
 
-Convert between columnar data (Arrow, Parquet, DuckDB, Polars, CSVW, CSV) and JSON-stat 2.0 cubes.
+Convert between columnar data (Arrow, Parquet, DuckDB, Polars, CSVW, CSV, Data Package) and JSON-stat 2.0 cubes.
 
 Arguments:
   input                    Input file path, URL, or "-" for stdin (default: "-").
-                           Supports .parquet, .arrow/.ipc, .csv, .csvw, .json/.jsonstat.
+                           Supports .parquet, .arrow/.ipc, .csv, .csvw,
+                           .datapackage/.datapackage.json/.json (with a `resources[]`
+                           shape), .json/.jsonstat.
 
 Options:
   -V, --version            Print version and exit.
@@ -26,6 +28,7 @@ Format:
                              arrow          — Arrow IPC stream/file
                              csv            — plain CSV (heuristic mapping)
                              csvw           — CSV with metadata
+                             datapackage    — Frictionless Data Package descriptor
                              jsonstat, json — JSON-stat input (round-trip)
   -t, --to <format>        Output format / direction. One of:
                              jsonstat (default) — IMPORT: columnar → JSON-stat
@@ -33,6 +36,7 @@ Format:
                              parquet            — EXPORT: JSON-stat → Parquet (needs parquet-wasm)
                              csv                — EXPORT: JSON-stat → CSV
                              csvw               — EXPORT: JSON-stat → CSV + CSVW metadata
+                             datapackage        — EXPORT: JSON-stat → CSV + Data Package descriptor
 
 Column mapping:
       --measure <column>   Name of the measure column (overrides detection).
@@ -68,9 +72,11 @@ Output:
       --no-canonical-keys  Preserve insertion key order.
       --validate           Validate output with jsonstat-validator (if installed).
 
-CSV/CSVW:
-      --csvw-metadata <json>  Inline CSVW metadata as a JSON string.
-      --delimiter <char>      CSV delimiter (default: ",").
+CSV/CSVW/Data Package:
+      --csvw-metadata <json>       Inline CSVW metadata as a JSON string.
+      --datapackage-metadata <json>  Inline Data Package descriptor as a JSON string
+                                    (the CLI then reads the CSV body from [input]).
+      --delimiter <char>           CSV delimiter (default: ",").
 ```
 
 ## Exit codes
@@ -108,6 +114,17 @@ npx jsonstat-io ./data.csv --from csvw \
   --csvw-metadata '{"tableSchema":{"columns":[{"titles":"year","datatype":"string"},{"titles":"value","datatype":"decimal"}],"primaryKey":["year"]}}'
 ```
 
+### IMPORT: Data Package with inline descriptor
+
+```sh
+npx jsonstat-io ./data.csv --from datapackage \
+  --datapackage-metadata '{"resources":[{"name":"data","path":"data.csv","schema":{"fields":[{"name":"year","type":"year"},{"name":"value","type":"number"}],"primaryKey":["year"]}}]}'
+```
+
+The CLI reads the CSV body from `[input]` and the descriptor from
+`--datapackage-metadata`; it also accepts a descriptor file directly as `[input]`
+(see [Data Package format](./formats/datapackage.md)).
+
 ### IMPORT: JSON-stat round-trip (re-emit with canonical keys)
 
 ```sh
@@ -139,6 +156,13 @@ npx jsonstat-io ./sales.jsonstat.json --to csv -o sales.csv
 npx jsonstat-io ./sales.jsonstat.json --to csvw -o sales.csvw
 ```
 
+### EXPORT: JSON-stat → Data Package (CSV + datapackage.json)
+
+```sh
+npx jsonstat-io ./sales.jsonstat.json --to datapackage -o sales.csv
+# writes sales.csv and datapackage.json (sibling)
+```
+
 ### Validate the output
 
 ```sh
@@ -153,7 +177,21 @@ If `jsonstat-validator` is not installed, `--validate` prints a hint instead of 
 When `--from` is omitted (or `auto`), the CLI:
 
 1. Reads magic bytes: `PAR1` → Parquet, `ARROW1` → Arrow IPC.
-2. Falls back to the file extension: `.parquet`, `.arrow`/`.ipc`, `.csv`, `.json`/`.jsonstat`.
+2. Falls back to the file extension:
+   - `.parquet` → Parquet
+   - `.arrow` / `.ipc` / `.feather` → Arrow IPC
+   - `.csv` → CSV (with sibling lookup, see step 3)
+   - `.csvw` / `.csv-metadata` → CSVW
+   - `.datapackage` / `.data-package` / `.fdp` → Data Package
+   - `.json` / `.jsonstat` / `.json-stat` → JSON-stat
 3. For `.csv`, tries to load a sibling `*-metadata.json` (CSVW convention). If found, uses CSVW; otherwise plain CSV.
+
+> **Note on `.json` and Data Packages.** A bare `.json` extension maps to
+> JSON-stat by default. To import a Frictionless Data Package descriptor that
+> ends in `.json` (e.g. `datapackage.json`), pass `--from datapackage`
+> explicitly, or rename/re-symlink it to a `.datapackage` / `.fdp` extension.
+> Alternatively, pass the CSV body as `[input]` together with
+> `--datapackage-metadata '<json>'` (the descriptor is then read from the flag,
+> not the file).
 
 DuckDB and Polars require a live connection or DataFrame object and are **not** available via the CLI — use the programmatic API ([`docs/formats/duckdb.md`](./formats/duckdb.md), [`docs/formats/polars.md`](./formats/polars.md)).

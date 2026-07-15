@@ -193,14 +193,18 @@ export function csvwToCube(
     }
   }
 
-  // Resolve measure: explicit > first numeric-datatype column.
+  // Resolve measure. Precedence: explicit option.measure > a column named
+  // "value" (case-insensitive) > first numeric-datatype column.
   let measureIdx = cols.findIndex((c) => c.name === options.measure);
+  if (measureIdx === -1 && !options.measure) {
+    measureIdx = cols.findIndex((c) => c.name.toLowerCase() === "value");
+  }
   if (measureIdx === -1) {
     measureIdx = cols.findIndex((c) => isNumericDatatype(c.datatype));
     if (measureIdx === -1) {
       throw new CsvwSourceError(
-        "No measure column: no column has a numeric datatype. " +
-          "Pass options.measure to name one.",
+        "No measure column: no column is named 'value' or has a numeric " +
+          "datatype. Pass options.measure to name one.",
       );
     }
   }

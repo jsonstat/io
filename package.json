@@ -1,7 +1,7 @@
 {
   "name": "jsonstat-io",
-  "version": "0.1.1",
-  "description": "Bidirectional bridge between the columnar stack (Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV) and JSON-stat 2.0 cubes. An Arrow-hubbed interop layer for the lakehouse ecosystem.",
+  "version": "0.2.0",
+  "description": "Bidirectional bridge between the columnar stack (Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, Data Package) and JSON-stat 2.0 cubes. An Arrow-hubbed interop layer for the lakehouse ecosystem.",
   "license": "Apache-2.0",
   "author": "Xavier Badosa",
   "homepage": "https://github.com/jsonstat/io#readme",
@@ -21,10 +21,15 @@
     "duckdb",
     "polars",
     "csvw",
+    "datapackage",
+    "frictionless",
+    "data-package",
     "statistical-data",
     "cube",
     "lakehouse",
-    "interop"
+    "interop",
+    "cdn",
+    "esm"
   ],
   "type": "module",
   "engines": {
@@ -66,11 +71,19 @@
       "import": "./dist/sources/csv.js",
       "require": "./dist/sources/csv.cjs"
     },
+    "./datapackage": {
+      "types": "./dist/sources/datapackage.d.ts",
+      "import": "./dist/sources/datapackage.js",
+      "require": "./dist/sources/datapackage.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "browser": "./dist/browser/jsonstat-io.global.js",
+  "unpkg": "./dist/browser/jsonstat-io.global.js",
+  "jsdelivr": "./dist/browser/jsonstat-io.global.js",
   "bin": {
     "jsonstat-io": "./dist/cli/index.js"
   },
@@ -124,6 +137,10 @@
     "@types/node": "^22.10.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "tar": "^7.5.20"
   }
 }

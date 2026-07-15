@@ -53,6 +53,16 @@ const dataset = await importToDataset("./data.csv", {
 | `propertyUrl` containing `#geo`       | `geo` role |
 | `primaryKey`                          | Dimension columns (if no explicit `options.dimensions`) |
 
+#### Measure resolution (default-measure rule)
+
+The measure is resolved with this precedence:
+
+1. the column named by `options.measure`, if set; otherwise
+2. a column named `value` (case-insensitive) — the **default measure**, picked even if its `datatype` is not numeric; otherwise
+3. the first column whose `datatype` is `decimal`/`integer`/`double`.
+
+This matches the plain-CSV default (see [csv.md](./csv.md)), so the canonical tidy form `…,status,value` imports without an explicit `--measure` whether or not the `value` field carries a numeric `datatype`.
+
 ### Role detection from `propertyUrl`
 
 The adapter checks if the `propertyUrl` contains a fragment hint:

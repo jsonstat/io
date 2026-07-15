@@ -2,23 +2,23 @@
  * JSON-stat 2.0 type model.
  *
  * Faithful TypeScript representation of the JSON-stat 2.0 format, derived from
- * the official specification (raw/fullspec.html) and the vendored JSON Schemas
- * (raw/schema/{index,dataset,collection,dimension}.json).
+ * the official specification at https://jsonstat.org/format/ and the official
+ * JSON Schemas (raw/schema/{index,dataset,collection,dimension}.json).
  *
  * These are *structural* types: they describe the wire format. Cross-field
  * cube invariants (e.g. `value.length === size.reduce(product)`) live in the
  * core engine, mirroring how the official JSON Schemas defer semantic checks
- * to jsonstat-validator (see wiki/validator.md and wiki/schema.md).
+ * to a separate jsonstat-validator (not bundled here).
  */
 
 // ---------------------------------------------------------------------------
 // Primitives & shared building blocks
 // ---------------------------------------------------------------------------
 
-/** Allowed JSON-stat response classes (see wiki/response-classes.md). */
+/** Allowed JSON-stat response classes (see the `class` field in the spec). */
 export type JsonStatClass = "dataset" | "dimension" | "collection" | "bundle" | "error";
 
-/** Semantic role assigned to one or more dimension IDs (see wiki/dimensions.md). */
+/** Semantic role assigned to one or more dimension IDs (the `role` object). */
 export interface JsonStatRole {
   /** Dimension IDs carrying temporal data (chronological order assumed). */
   time?: string[];
@@ -28,7 +28,7 @@ export interface JsonStatRole {
   metric?: string[];
 }
 
-/** Unit of measure metadata for a metric-role category (see wiki/dimensions.md). */
+/** Unit of measure metadata for a metric-role category (`category.unit`). */
 export interface JsonStatUnit {
   /** Required when `unit` is present: number of decimals. */
   decimals: number;
@@ -55,7 +55,7 @@ export interface JsonStatCategory {
   index?: string[] | Record<string, number>;
   /** ID→human-readable label map. If omitted, IDs are used as labels. */
   label?: Record<string, string>;
-  /** Parent ID → array of direct-child IDs (hierarchies; see wiki/dimensions.md). */
+  /** Parent ID → array of direct-child IDs (dimension hierarchies). */
   child?: Record<string, string[]>;
   /** ID → [lon, lat] for geo-role categories. */
   coordinates?: Record<string, Coordinates>;
@@ -78,14 +78,14 @@ export interface JsonStatDimension {
   href?: string;
   /** Provider-specific extension data. */
   extension?: Record<string, unknown>;
-  /** Related resources (see wiki/links.md). */
+  /** Related resources (the `link` array, IANA link relations). */
   link?: JsonStatLink[];
   /** Annotations. */
   note?: string[];
 }
 
 // ---------------------------------------------------------------------------
-// Links (IANA link relations; see wiki/links.md)
+// Links (IANA link relations)
 // ---------------------------------------------------------------------------
 
 /** A single link entry. `rel` is an IANA link relation (e.g. "item", "self"). */
@@ -108,7 +108,7 @@ export interface JsonStatLinkMap {
 }
 
 // ---------------------------------------------------------------------------
-// status (observation-level metadata; see wiki/dataset-structure.md)
+// status (observation-level metadata)
 // ---------------------------------------------------------------------------
 
 /**
@@ -122,7 +122,7 @@ export interface JsonStatLinkMap {
 export type JsonStatStatus = string[] | string | Record<string, string>;
 
 // ---------------------------------------------------------------------------
-// value (dense array or sparse object; see wiki/sparse-cubes.md)
+// value (dense array or sparse object)
 // ---------------------------------------------------------------------------
 
 /**
@@ -138,7 +138,7 @@ export type JsonStatValue = (number | null)[] | Record<string, number>;
 // Response classes
 // ---------------------------------------------------------------------------
 
-/** Top-level dataset response (see wiki/response-classes.md). */
+/** Top-level dataset response (class = "dataset"). */
 export interface JsonStatDataset {
   version: "2.0";
   class: "dataset";

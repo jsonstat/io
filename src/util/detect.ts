@@ -17,6 +17,7 @@ export type SourceFormat =
   | "arrow"
   | "csv"
   | "csvw"
+  | "datapackage"
   | "jsonstat"
   | "json"
   | "unknown";
@@ -55,6 +56,12 @@ export function detectFromBytes(bytes: Uint8Array | ArrayBuffer): SourceFormat {
     if (text.includes("json-stat") || (text.includes('"class"') && text.includes('"version"'))) {
       return "jsonstat";
     }
+    // Heuristic: a Data Package descriptor has a top-level `"resources"` array.
+    // Sniff a wider window to catch it (the key may not be in the first 64 B).
+    const wider = new TextDecoder().decode(view.slice(0, Math.min(2048, view.length)));
+    if (wider.includes('"resources"')) {
+      return "datapackage";
+    }
     return "json";
   }
   // CSV: presence of a delimiter and typical header-ish content is weak; defer
@@ -82,6 +89,10 @@ export function detectFromExtension(ext: string): SourceFormat {
     case "csvw":
     case "csv-metadata":
       return "csvw";
+    case "datapackage":
+    case "data-package":
+    case "fdp":
+      return "datapackage";
     case "json-stat":
     case "jsonstat":
       return "jsonstat";

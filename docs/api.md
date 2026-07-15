@@ -45,12 +45,23 @@ Extends `ArrowToCubeOptions`:
 | `from`            | `SourceFormat \| "auto"`          | `"auto"`    | Force a format instead of auto-detecting |
 | `build`           | `BuildOptions`                    | —           | Passed to `buildDataset` |
 | `csvwMetadata`    | `unknown`                         | —           | CSVW metadata object (when `from: "csvw"`) |
+| `datapackageMetadata` | `unknown`                     | —           | Data Package descriptor (when `from: "datapackage"`; otherwise the source bytes *are* the descriptor) |
+| `datapackageResourcePath` | `string`                    | —           | Pick the resource whose `path`/`name` matches |
+| `datapackageResourceIndex` | `number`                    | —           | Pick the resource by 0-based index |
 | `delimiter`       | `string`                          | `","`       | CSV delimiter |
 | `measure`         | `string`                          | *(detected)*| Measure column name |
 | `dimensions`      | `string[]`                        | *(detected)*| Dimension column names |
 | `status`          | `string`                          | *(detected)*| Status column name |
 | `roles`           | `RoleMap`                         | *(inferred)*| Role assignments |
 | `valueForm`       | `"auto" \| "dense" \| "sparse"`  | `"auto"`    | Value form hint |
+
+#### Default-measure rule
+
+When `measure` is not set, the CSV, CSVW, and Data Package adapters look for a
+column literally named **`value`** (case-insensitive) and treat it as the
+measure. Only if no such column exists do they fall back to type-based inference
+(numeric column for CSV/CSVW; first non-`primaryKey` numeric field for Data
+Package). Pass an explicit `options.measure` to override this default.
 
 ### `importToCube`
 
@@ -76,21 +87,24 @@ const csv = await exportDataset(dataset, { to: "csv" });
 
 // → CSV text + CSVW metadata object
 const { csv, metadata } = await exportDataset(dataset, { to: "csvw" });
+
+// → CSV text + Frictionless Data Package descriptor
+const dp = await exportDataset(dataset, { to: "datapackage" });
 ```
 
-Flattens a JSON-stat dataset to the Observations IR via `readDataset`, then converts to the requested target format. Arrow-native targets (parquet) funnel through `cubeToArrow`; text targets (csv, csvw) serialize directly from the IR.
+Flattens a JSON-stat dataset to the Observations IR via `readDataset`, then converts to the requested target format. Arrow-native targets (parquet) funnel through `cubeToArrow`; text targets (csv, csvw, datapackage) serialize directly from the IR.
 
 **Parameters:**
 - `dataset: JsonStatDataset` — the input JSON-stat dataset.
 - `options: ExportOptions` — `{ to, ...format-specific options }`.
 
-**Returns:** `Promise<ExportResult>` — an Arrow `Table` (`to: "arrow"`), a `Uint8Array` (`to: "parquet"`), a `string` (`to: "csv"`), or a `{ csv, metadata }` object (`to: "csvw"`).
+**Returns:** `Promise<ExportResult>` — an Arrow `Table` (`to: "arrow"`), a `Uint8Array` (`to: "parquet"`), a `string` (`to: "csv"`), or a `{ csv, metadata }` object (`to: "csvw"` or `to: "datapackage"`).
 
 ### `ExportOptions`
 
 | Field    | Type                                | Description |
 |----------|-------------------------------------|-------------|
-| `to`     | `ExportTarget`                      | `"arrow"` \| `"parquet"` \| `"csv"` \| `"csvw"` |
+| `to`     | `ExportTarget`                      | `"arrow"` \| `"parquet"` \| `"csv"` \| `"csvw"` \| `"datapackage"` |
 | *(format-specific)* | varies                | Passed through to the target adapter (e.g. `compression` for parquet, `delimiter` for csv) |
 
 ---
@@ -241,6 +255,27 @@ const { csv, metadata } = cubeToCsvw(obs);
 
 No dependencies. See [`formats/csvw.md`](./formats/csvw.md).
 
+### `jsonstat-io/datapackage`
+
+```ts
+import {
+  datapackageToCube,
+  parseDataPackageMetadata,
+  selectResource,
+  cubeToDataPackage,
+} from "jsonstat-io/datapackage";
+
+const meta = parseDataPackageMetadata(descriptorJson);
+const resource = selectResource(meta, { resourcePath: "sales.csv" });
+const obs = datapackageToCube(csvText, meta, { measure: "amount" });
+
+// Export: IR → CSV text + Frictionless Data Package descriptor
+const { csv, metadata } = cubeToDataPackage(obs);
+```
+
+No dependencies. Round-trips JSON-stat semantics via the `jsonstat:*` vendor
+extension keys. See [`formats/datapackage.md`](./formats/datapackage.md).
+
 ### `jsonstat-io/csv`
 
 ```ts
@@ -318,5 +353,6 @@ decideDensity(0.6, 0.5);  // { form: "sparse", nullRatio: 0.6, threshold: 0.5 }
 | `PolarsSourceError`   | `polarsToCube` |
 | `CsvwSourceError`     | `csvwToCube` |
 | `CsvSourceError`      | `csvToCube` |
+| `DataPackageSourceError` | `datapackageToCube` |
 
 All extend `Error` and set `this.name` to the class name.

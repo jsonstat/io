@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jsonstat-io — Standalone Browser Bundle (two-tag CDN)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.5rem; }
+    .step { margin: 1rem 0; padding: 0.75rem; background: #f5f5f5; border-radius: 4px; }
+    .note { font-size: 0.85rem; color: #666; }
+    .error { color: #c00; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; }
+    th { background: #e8e8e8; }
+  </style>
+</head>
+<body>
+  <h1>jsonstat-io — Standalone Browser Bundle</h1>
+  <p>
+    This page uses the slim <strong>IIFE browser bundle</strong> of
+    <code>jsonstat-io</code> loaded from a CDN, with <code>apache-arrow</code>
+    supplied separately as a UMD global — the <strong>two-tag pattern</strong>.
+    No bundler, no import map, no build step: just two <code><script></code>
+    tags. The whole jsonstat-io bundle is ~17 KB gzipped; apache-arrow is only
+    loaded once and cached for every consumer on the page.
+  </p>
+
+  <p class="note">
+    The two tags (in <code><head></code>) are:
+  </p>
+  <pre id="tags"></pre>
+
+  <div class="step">
+    <strong>Round-trip demo:</strong> build a JSON-stat dataset in memory,
+    export it to an Arrow <code>Table</code>, and read it back to JSON-stat.
+    <br />
+    <button id="run">Run JSON-stat ⇄ Arrow round-trip</button>
+    <span id="status"></span>
+  </div>
+
+  <div id="error" class="error"></div>
+
+  <h2>Result</h2>
+  <h3>Arrow table (intermediate)</h3>
+  <div id="arrow"></div>
+  <h3>JSON-stat read back</h3>
+  <pre id="json">Click "Run" to see the round-trip.</pre>
+
+  <!--
+    === TWO-TAG PATTERN ====================================================
+    1. apache-arrow UMD first — defines `window.Arrow`.
+    2. jsonstat-io IIFE second — attaches the `window.JSONstatIo` global,
+       resolving `apache-arrow` to the already-loaded `window.Arrow` global
+       instead of bundling its own copy.
+    Pin both versions together; the apache-arrow major (17) must match the one
+    jsonstat-io was built against.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/apache-arrow@17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsonstat-io@0.2.0/dist/browser/jsonstat-io.global.js"></script>
+
+  <script>
+    // Show the exact two-tag markup this page uses.
+    document.getElementById("tags").textContent =
+      '<script src="https://cdn.jsdelivr.net/npm/apache-arrow@17"><\/script>\n' +
+      '<script src="https://cdn.jsdelivr.net/npm/jsonstat-io@0.2.0/dist/browser/jsonstat-io.global.js"><\/script>';
+
+    const J = window.JSONstatIo;
+
+    function fail(msg) {
+      document.getElementById("error").textContent = msg;
+      console.error(msg);
+    }
+
+    document.getElementById("run").addEventListener("click", async () => {
+      document.getElementById("error").textContent = "";
+      document.getElementById("status").textContent = "running…";
+      try {
+        // A minimal 2x2 JSON-stat 2.0 dataset (sex × year).
+        const dataset = {
+          version: "2.0",
+          class: "dataset",
+          label: "Demo dataset",
+          source: "browser-standalone example",
+          id: ["sex", "year"],
+          size: [2, 2],
+          dimension: {
+            sex:  { category: { index: ["M", "F"] } },
+            year: { category: { index: ["2020", "2021"] } },
+          },
+          value: [10, 20, 30, 40],
+        };
+
+        // 1) JSON-stat -> Arrow Table (in memory).
+        const table = await J.exportDataset(dataset, { to: "arrow" });
+
+        // Render the Arrow table as a simple HTML table.
+        const cols = table.schema.fields.map((f) => f.name);
+        let html = "<table><thead><tr>" +
+          cols.map((c) => "<th>" + c + "</th>").join("") +
+          "</tr></thead><tbody>";
+        for (let i = 0; i < table.numRows; i++) {
+          html += "<tr>" +
+            cols.map((c) => "<td>" + table.getChild(c).get(i) + "</td>").join("") +
+            "</tr>";
+        }
+        html += "</tbody></table>";
+        document.getElementById("arrow").innerHTML =
+          "<p class='note'>" + table.numRows + " rows × " + cols.length +
+          " cols</p>" + html;
+
+        // 2) Arrow Table -> JSON-stat (round-trip).
+        const roundTripped = await J.importToDataset(table, { from: "arrow" });
+        document.getElementById("json").textContent =
+          JSON.stringify(roundTripped, null, 2);
+
+        document.getElementById("status").textContent = "done ✓";
+      } catch (e) {
+        document.getElementById("status").textContent = "failed";
+        fail(String(e && e.message ? e.message : e));
+      }
+    });
+  </script>
+</body>
+</html>

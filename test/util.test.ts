@@ -12,6 +12,8 @@ import {
 } from "../src/util/detect";
 import { decideDensity } from "../src/util/density";
 import { serialize } from "../src/sink/serialize";
+import { csvToCube } from "../src/sources/csv";
+import { csvwToCube, parseCsvwMetadata } from "../src/sources/csvw";
 import { simpleDataset } from "./fixtures";
 
 // ---------------------------------------------------------------------------
@@ -199,5 +201,74 @@ describe("serialize", () => {
     expect(parsed.id).toEqual(ds.id);
     expect(parsed.size).toEqual(ds.size);
     expect(parsed.value).toEqual(ds.value);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Default-measure="value" rule (CSV + CSVW)
+// ---------------------------------------------------------------------------
+
+describe("default-measure value rule (csvToCube)", () => {
+  it("treats a column named 'value' as the measure without --measure", () => {
+    const csv = "year,geo,value\n2020,ES,100\n2021,FR,200";
+    const obs = csvToCube(csv);
+    expect(obs.measure.name).toBe("value");
+    expect(obs.measure.values).toEqual([100, 200]);
+    expect(obs.model.dimensionIds).toEqual(["year", "geo"]);
+  });
+
+  it("matches 'value' case-insensitively", () => {
+    const csv = "year,geo,VALUE\n2020,ES,1\n";
+    const obs = csvToCube(csv);
+    expect(obs.measure.name).toBe("VALUE");
+  });
+
+  it("falls back to numeric inference when no 'value' column exists", () => {
+    // Categorical (non-numeric) dimensions, so 'amount' is the first and only
+    // all-numeric column.
+    const csv = "country,product,amount\nES,A,100\nFR,B,200";
+    const obs = csvToCube(csv);
+    expect(obs.measure.name).toBe("amount");
+  });
+
+  it("honors an explicit options.measure over the 'value' default", () => {
+    const csv = "year,geo,value,amount\n2020,ES,1,100\n2021,FR,2,200";
+    const obs = csvToCube(csv, { measure: "amount" });
+    expect(obs.measure.name).toBe("amount");
+    // 'value' is now a dimension.
+    expect(obs.model.dimensionIds).toContain("value");
+  });
+});
+
+describe("default-measure value rule (csvwToCube)", () => {
+  it("treats a field named 'value' as the measure even without a numeric datatype", () => {
+    const csv = "year,value\n2020,1\n2021,2";
+    const meta = parseCsvwMetadata({
+      tableSchema: {
+        columns: [
+          { name: "year", titles: "year", datatype: "string" },
+          { name: "value", titles: "value", datatype: "string" },
+        ],
+        primaryKey: ["year"],
+      },
+    });
+    const obs = csvwToCube(csv, meta);
+    expect(obs.measure.name).toBe("value");
+    expect(obs.model.dimensionIds).toEqual(["year"]);
+  });
+
+  it("falls back to numeric-datatype detection when no 'value' field exists", () => {
+    const csv = "year,amount\n2020,1\n2021,2";
+    const meta = parseCsvwMetadata({
+      tableSchema: {
+        columns: [
+          { name: "year", titles: "year", datatype: "string" },
+          { name: "amount", titles: "amount", datatype: "decimal" },
+        ],
+        primaryKey: ["year"],
+      },
+    });
+    const obs = csvwToCube(csv, meta);
+    expect(obs.measure.name).toBe("amount");
   });
 });

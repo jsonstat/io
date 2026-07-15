@@ -46,7 +46,8 @@ The package is organized in strict layers with one-way dependencies:
 ┌─────────────────────────────────────────────────────────┐
 │  Public API (index.ts) + CLI (cli/)                     │  ← what consumers call
 ├─────────────────────────────────────────────────────────┤
-│  Sources (parquet, duckdb, polars, csvw, csv)           │  ← format adapters
+│  Sources (parquet, duckdb, polars, csvw, csv,           │  ← format adapters
+│           datapackage) + Browser shims (browser/)       │
 ├─────────────────────────────────────────────────────────┤
 │  Arrow hub (arrowToCube, arrowFromCube, schemaMeta)     │  ← the hub
 ├─────────────────────────────────────────────────────────┤
@@ -94,8 +95,27 @@ Each adapter is bidirectional — a thin wrapper that, on import, gets bytes (or
 - **`polars.ts`** — `polarsToCube(df)` / `cubeToPolars(obs)` via `toArrow()`/`fromArrow()`. Node only.
 - **`csvw.ts`** — `csvwToCube(text, metadata)` / `cubeToCsvw(obs)` uses CSVW metadata for lossless mapping. No deps.
 - **`csv.ts`** — `csvToCube(text)` / `cubeToCsv(obs)` infers measure/dimensions heuristically on import; serializes dimensions+measure+status columns on export. No deps.
+- **`datapackage.ts`** — `datapackageToCube(text, descriptor)` / `cubeToDataPackage(obs)` maps a Frictionless Data Package schema (`fields`/`primaryKey`/`type`/`rdfType`) and round-trips JSON-stat semantics via the `jsonstat:*` vendor extension keys. No deps.
 
 All optional peer imports are **lazy** (`await import(...)`) so they never enter a bundle that doesn't use them.
+
+### Layer 4b: Browser shims (`src/browser/`)
+
+Used only by the standalone IIFE bundle (`tsup`'s `browserConfig`), not by the
+library build:
+
+- **`arrow-global.ts`** — reads `globalThis.Arrow` (the apache-arrow UMD global
+  loaded via a separate `<script>` tag) and re-exports the named symbols the
+  package needs. This is what enables the *two-tag* browser pattern: one tag for
+  apache-arrow, one for the slim jsonstat-io IIFE.
+- **`peer-stub.ts`** — a `Proxy` that throws on any access, aliased to the
+  optional heavy peers (`parquet-wasm`, `@duckdb/duckdb-wasm`, `duckdb-async`,
+  `nodejs-polars`) at build time. Because IIFE cannot code-split, the dynamic
+  imports of these peers would otherwise inline megabytes of WASM; the stub
+  keeps the bundle ~17 KB gzipped while preserving a friendly error path (the
+  adapters' lazy loaders already wrap these in try/catch).
+
+See the README *"Browser / CDN"* section for the usage pattern.
 
 ### Layer 5: Sink + Utils (`src/sink/`, `src/util/`)
 
@@ -129,9 +149,9 @@ Every source produces this shape. `buildDataset` is the only consumer that pivot
 
 Both directions are fully implemented and tested:
 
-- **Import** (columnar → JSON-stat): `arrowToCube` handles Arrow-native sources; `csvToCube` / `csvwToCube` handle text formats; `buildDataset` scatters into the cube. Exposed via [`importToDataset`](./api.md#importtodatasetsource-options).
-- **Export** (JSON-stat → columnar): `readDataset` flattens the cube to the IR; `cubeToArrow` handles Arrow-native targets (Parquet, DuckDB, Polars); `cubeToCsv` / `cubeToCsvw` handle text targets. Exposed via [`exportDataset`](./api.md#exportdatasetdataset-options).
-- **CLI:** the `--to` flag drives direction — `jsonstat` (default) imports; `arrow|parquet|csv|csvw` exports.
+- **Import** (columnar → JSON-stat): `arrowToCube` handles Arrow-native sources; `csvToCube` / `csvwToCube` / `datapackageToCube` handle text formats; `buildDataset` scatters into the cube. Exposed via [`importToDataset`](./api.md#importtodatasetsource-options).
+- **Export** (JSON-stat → columnar): `readDataset` flattens the cube to the IR; `cubeToArrow` handles Arrow-native targets (Parquet, DuckDB, Polars); `cubeToCsv` / `cubeToCsvw` / `cubeToDataPackage` handle text targets. Exposed via [`exportDataset`](./api.md#exportdatasetdataset-options).
+- **CLI:** the `--to` flag drives direction — `jsonstat` (default) imports; `arrow|parquet|csv|csvw|datapackage` exports.
 
 The same Observations IR sits at the center of both directions, guaranteeing that `export → import` round-trips losslessly.
 
