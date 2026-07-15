@@ -62,7 +62,9 @@ async function main() {
     // Print a summary.
     console.log("\n--- Cube summary ---");
     console.log(`Dimensions: ${dataset.id.join(", ")}`);
-    console.log(`Size: ${dataset.size.join(" × ")} = ${dataset.size.reduce((a, b) => a * b, 1)} cells`);
+    console.log(
+      `Size: ${dataset.size.join(" × ")} = ${dataset.size.reduce((a, b) => a * b, 1)} cells`,
+    );
     console.log(`Roles: ${JSON.stringify(dataset.role)}`);
     console.log(`Value form: ${Array.isArray(dataset.value) ? "dense" : "sparse"}`);
     console.log(`Status: ${JSON.stringify(dataset.status)}`);

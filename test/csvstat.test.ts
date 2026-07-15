@@ -3,15 +3,15 @@
  * export (`cubeToCsvstat`), round-trip fidelity, and format detection.
  */
 
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolve, dirname } from "node:path";
-import { csvstatToCube, cubeToCsvstat } from "../src/sources/csvstat";
-import { readDataset } from "../src/core/cubeReader";
+import { describe, expect, it } from "vitest";
 import { buildDataset } from "../src/core/cubeBuilder";
-import { detectFromBytes, detectFromExtension } from "../src/util/detect";
+import { readDataset } from "../src/core/cubeReader";
 import type { JsonStatDataset } from "../src/model/jsonstat";
+import { csvstatToCube, cubeToCsvstat } from "../src/sources/csvstat";
+import { detectFromBytes, detectFromExtension } from "../src/util/detect";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GALICIA_PATH = resolve(__dirname, "../.idea/galicia.jsv");
@@ -139,9 +139,7 @@ describe("CSV-stat export (cubeToCsvstat)", () => {
     const yearLine = lines.find((l) => l.startsWith("dimension,year"));
     expect(yearLine).toBe("dimension,year,year,2,2001,2001,2011,2011,time");
     const conceptLine = lines.find((l) => l.startsWith("dimension,concept"));
-    expect(conceptLine).toBe(
-      "dimension,concept,concept,1,pop,population,metric,0|persons",
-    );
+    expect(conceptLine).toBe("dimension,concept,concept,1,pop,population,metric,0|persons");
     // data marker + CSV header.
     expect(lines).toContain("data");
     expect(lines).toContain("sex,year,concept,value");
@@ -180,7 +178,6 @@ describe("CSV-stat export (cubeToCsvstat)", () => {
 
   it("quotes fields containing the delimiter", () => {
     const obs = csvstatToCube(MINI_JSV);
-    const out = cubeToCsvstat(obs);
     // The label has no comma, but the source/URL are fine; force a quoted check
     // by re-exporting with a label that contains a comma.
     obs.model.meta = { label: "Hello, World" };
@@ -199,48 +196,54 @@ describe("CSV-stat round-trip", () => {
     const { dataset } = buildDataset(obs, { valueForm: "dense" });
     const obs2 = readDataset(dataset, { dropNulls: false });
     const out = cubeToCsvstat(obs2);
-    expect(out).toBe(MINI_JSV + "\r\n");
+    expect(out).toBe(`${MINI_JSV}\r\n`);
   });
 
-  it("round-trips the canonical galicia.jsv sample without loss", () => {
-    const original = readFileSync(GALICIA_PATH, "utf8");
-    // galicia.jsv uses LF line endings; normalize to CRLF for round-trip
-    // stability (our writer emits CRLF by default).
-    const normalized = original.replace(/\r\n/g, "\n");
-    const obs = csvstatToCube(normalized, { valueForm: "dense" });
-    const { dataset } = buildDataset(obs, { valueForm: "dense" });
-    const obs2 = readDataset(dataset, { dropNulls: false });
-    const out = cubeToCsvstat(obs2);
+  // galicia.jsv is a local-only (gitignored under .idea/) fixture derived from
+  // the canonical OECD JSON-stat sample. Skip when absent so CI/publish are not
+  // blocked; the test runs when a developer has the fixture locally.
+  it.skipIf(!existsSync(GALICIA_PATH))(
+    "round-trips the canonical galicia.jsv sample without loss",
+    () => {
+      const original = readFileSync(GALICIA_PATH, "utf8");
+      // galicia.jsv uses LF line endings; normalize to CRLF for round-trip
+      // stability (our writer emits CRLF by default).
+      const normalized = original.replace(/\r\n/g, "\n");
+      const obs = csvstatToCube(normalized, { valueForm: "dense" });
+      const { dataset } = buildDataset(obs, { valueForm: "dense" });
+      const obs2 = readDataset(dataset, { dropNulls: false });
+      const out = cubeToCsvstat(obs2);
 
-    // Re-import the exported text and compare the materialized datasets.
-    const roundTripped = csvstatToCube(out.replace(/\r\n/g, "\n"), {
-      valueForm: "dense",
-    });
-    const { dataset: rebuilt2 } = buildDataset(roundTripped, {
-      valueForm: "dense",
-    });
-    expect(rebuilt2.id).toEqual(dataset.id);
-    expect(rebuilt2.size).toEqual(dataset.size);
-    // Materialized values must match exactly.
-    const total = dataset.size!.reduce((p, s) => p * s, 1);
-    const a = materialize(dataset.value, total);
-    const b = materialize(rebuilt2.value, total);
-    expect(b).toEqual(a);
-    // Category order must be preserved per dimension.
-    for (const dimId of dataset.id!) {
-      const idxA = dataset.dimension[dimId].category?.index;
-      const idxB = rebuilt2.dimension[dimId].category?.index;
-      if (idxA && idxB) {
-        const arrA = Array.isArray(idxA)
-          ? idxA
-          : Object.keys(idxA).sort((x, y) => idxA[x] - idxA[y]);
-        const arrB = Array.isArray(idxB)
-          ? idxB
-          : Object.keys(idxB).sort((x, y) => idxB[x] - idxB[y]);
-        expect(arrB).toEqual(arrA);
+      // Re-import the exported text and compare the materialized datasets.
+      const roundTripped = csvstatToCube(out.replace(/\r\n/g, "\n"), {
+        valueForm: "dense",
+      });
+      const { dataset: rebuilt2 } = buildDataset(roundTripped, {
+        valueForm: "dense",
+      });
+      expect(rebuilt2.id).toEqual(dataset.id);
+      expect(rebuilt2.size).toEqual(dataset.size);
+      // Materialized values must match exactly.
+      const total = dataset.size!.reduce((p, s) => p * s, 1);
+      const a = materialize(dataset.value, total);
+      const b = materialize(rebuilt2.value, total);
+      expect(b).toEqual(a);
+      // Category order must be preserved per dimension.
+      for (const dimId of dataset.id!) {
+        const idxA = dataset.dimension[dimId].category?.index;
+        const idxB = rebuilt2.dimension[dimId].category?.index;
+        if (idxA && idxB) {
+          const arrA = Array.isArray(idxA)
+            ? idxA
+            : Object.keys(idxA).sort((x, y) => idxA[x] - idxA[y]);
+          const arrB = Array.isArray(idxB)
+            ? idxB
+            : Object.keys(idxB).sort((x, y) => idxB[x] - idxB[y]);
+          expect(arrB).toEqual(arrA);
+        }
       }
-    }
-  });
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -264,10 +267,7 @@ describe("CSV-stat detection", () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function materialize(
-  value: JsonStatDataset["value"],
-  total: number,
-): (number | null)[] {
+function materialize(value: JsonStatDataset["value"], total: number): (number | null)[] {
   if (Array.isArray(value)) return value;
   const dense = new Array(total).fill(null);
   for (const [k, v] of Object.entries(value)) {

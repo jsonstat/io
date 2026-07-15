@@ -14,12 +14,12 @@
  * error.
  */
 
+import type { Table } from "apache-arrow";
+import { tableFromIPC, tableToIPC } from "apache-arrow";
+import { cubeToArrow } from "../arrow/arrowFromCube";
+import { type ArrowToCubeOptions, arrowToCube } from "../arrow/arrowToCube";
 import type { Observations } from "../model/ir";
 import type { JsonStatDataset } from "../model/jsonstat";
-import { arrowToCube, type ArrowToCubeOptions } from "../arrow/arrowToCube";
-import { cubeToArrow } from "../arrow/arrowFromCube";
-import type { Table } from "apache-arrow";
-import { tableToIPC, tableFromIPC } from "apache-arrow";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -49,6 +49,28 @@ export interface ParquetToCubeOptions extends ArrowToCubeOptions {
 // ---------------------------------------------------------------------------
 
 /**
+ * Structural shape of the dynamically-imported parquet-wasm module and the WASM
+ * objects it returns. parquet-wasm is an **optional peer dependency** with no
+ * types imported into this package; its runtime shape also varies across build
+ * flavors (ESM/CJS/Node), so we model only the surface we touch.
+ */
+interface ParquetWasmHandle {
+  default?: ParquetWasmHandle;
+  init?: () => Promise<void>;
+  readParquet?: (bytes: Uint8Array | ArrayBuffer) => ParquetWasmTable;
+  writeParquet?: (table: unknown, props?: unknown) => Uint8Array | ArrayBuffer;
+  Table?: { fromIPCStream: (ipc: unknown) => unknown };
+  Compression?: Record<string, unknown>;
+  WriterPropertiesBuilder?: new () => {
+    setCompression: (c: unknown) => { build: () => unknown };
+  };
+}
+
+interface ParquetWasmTable {
+  intoIPCStream: () => unknown;
+}
+
+/**
  * Dynamically import parquet-wasm and ensure its WASM binary is instantiated.
  * Kept in a function so the import is only evaluated when a Parquet read is
  * actually requested.
@@ -62,7 +84,7 @@ export interface ParquetToCubeOptions extends ArrowToCubeOptions {
  * wasm-bindgen internals (e.g. `__wbindgen_add_to_stack_pointer`) are not yet
  * wired up.
  */
-async function ensureParquetWasmInit(mod: any): Promise<void> {
+async function ensureParquetWasmInit(mod: ParquetWasmHandle): Promise<void> {
   const initialize =
     typeof mod.default === "function"
       ? mod.default // ESM build: default export = __wbg_init
@@ -76,14 +98,14 @@ async function ensureParquetWasmInit(mod: any): Promise<void> {
  * Dynamically import parquet-wasm, ensure the WASM binary is ready, and return
  * the object exposing `readParquet`.
  */
-async function loadParquetWasm(): Promise<any> {
+async function loadParquetWasm(): Promise<ParquetWasmHandle> {
   try {
-    const mod: any = await import("parquet-wasm");
+    const mod = (await import("parquet-wasm")) as ParquetWasmHandle;
     await ensureParquetWasmInit(mod);
     // After init, the named exports (readParquet, Table, ...) are ready.
     if (mod.default && typeof mod.default.readParquet === "function") return mod.default;
     return mod;
-  } catch (e) {
+  } catch {
     throw new ParquetSourceError(
       "parquet-wasm is not installed. Install it with `npm i parquet-wasm` to read Parquet files.",
     );
@@ -106,13 +128,13 @@ export async function parquetToCube(
 ): Promise<Observations> {
   if (options.init) await options.init();
   const wasm = await loadParquetWasm();
-  let wasmTable: any;
+  let wasmTable: ParquetWasmTable | undefined;
   try {
     // parquet-wasm's readParquet returns its own Arrow Table (apache-arrow
     // interop via IPC), not the caller's apache-arrow Table.
-    wasmTable = wasm.readParquet(bytes);
-  } catch (e: any) {
-    throw new ParquetSourceError(`Failed to read Parquet: ${e?.message ?? e}`);
+    wasmTable = wasm.readParquet?.(bytes);
+  } catch (e: unknown) {
+    throw new ParquetSourceError(`Failed to read Parquet: ${errorMessage(e)}`);
   }
   if (!wasmTable) throw new ParquetSourceError("parquet-wasm returned no table");
 
@@ -120,8 +142,11 @@ export async function parquetToCube(
   // understand) and reconstruct with our apache-arrow `tableFromIPC`, exactly
   // as documented in the parquet-wasm README:
   //   const arrowTable = tableFromIPC(wasmTable.intoIPCStream());
+  // The IPC bytes come from parquet-wasm's own Arrow copy; apache-arrow's
+  // `tableFromIPC` accepts several reader shapes (and a sync/async union), so we
+  // widen the unknown view and assert the synchronous Table result.
   const ipc = wasmTable.intoIPCStream();
-  const table = tableFromIPC(ipc);
+  const table = tableFromIPC(ipc as Parameters<typeof tableFromIPC>[0]) as Table;
   return arrowToCube(table, options);
 }
 
@@ -187,29 +212,25 @@ const COMPRESSION_CODEC_SET = new Set<string>(COMPRESSION_CODEC_KEYS);
  *   build does not export `WriterPropertiesBuilder` / `Compression` / the
  *   requested codec key.
  */
-function buildWriterProperties(wasm: any, codec: string | undefined): any {
+function buildWriterProperties(wasm: ParquetWasmHandle, codec: string | undefined): unknown {
   if (!codec) return undefined;
   const key = codec.toLowerCase();
   if (!COMPRESSION_CODEC_SET.has(key)) {
     throw new ParquetSourceError(
-      `Unknown compression codec "${codec}". ` +
-        `Valid (case-insensitive): ${[...COMPRESSION_CODEC_KEYS].join(", ")}.`,
+      `Unknown compression codec "${codec}". Valid (case-insensitive): ${[...COMPRESSION_CODEC_KEYS].join(", ")}.`,
     );
   }
-  const Compression: any = wasm.Compression;
-  const WriterPropertiesBuilder: any = wasm.WriterPropertiesBuilder;
+  const Compression = wasm.Compression;
+  const WriterPropertiesBuilder = wasm.WriterPropertiesBuilder;
   if (!Compression || !WriterPropertiesBuilder) {
     throw new ParquetSourceError(
-      `Cannot apply compression "${codec}": this parquet-wasm build does not ` +
-        "export WriterPropertiesBuilder/Compression. " +
-        "Omit the `compression` option to use the default codec.",
+      `Cannot apply compression "${codec}": this parquet-wasm build does not export WriterPropertiesBuilder/Compression. Omit the \`compression\` option to use the default codec.`,
     );
   }
   const enumKey = key.toUpperCase();
   if (!(enumKey in Compression)) {
     throw new ParquetSourceError(
-      `Compression codec "${codec}" is not available in this parquet-wasm ` +
-        "build. Omit the `compression` option to use the default codec.",
+      `Compression codec "${codec}" is not available in this parquet-wasm build. Omit the \`compression\` option to use the default codec.`,
     );
   }
   return new WriterPropertiesBuilder().setCompression(Compression[enumKey]).build();
@@ -220,9 +241,9 @@ function buildWriterProperties(wasm: any, codec: string | undefined): any {
  * [`loadParquetWasm`], but documented separately because the two bindings can
  * diverge across parquet-wasm versions.
  */
-async function loadParquetWriter(): Promise<any> {
+async function loadParquetWriter(): Promise<ParquetWasmHandle> {
   try {
-    const mod: any = await import("parquet-wasm");
+    const mod = (await import("parquet-wasm")) as ParquetWasmHandle;
     await ensureParquetWasmInit(mod);
     if (mod.default && typeof mod.default.writeParquet === "function") return mod.default;
     return mod;
@@ -231,6 +252,12 @@ async function loadParquetWriter(): Promise<any> {
       "parquet-wasm is not installed. Install it with `npm i parquet-wasm` to write Parquet files.",
     );
   }
+}
+
+/** Extract a human-readable message from a caught value of unknown type. */
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return String(e);
 }
 
 /**
@@ -261,15 +288,23 @@ export async function arrowToParquet(
     // documented in the parquet-wasm README:
     //   Table.fromIPCStream(tableToIPC(table, "stream"))
     const ipc = tableToIPC(table, "stream");
-    const wasmTable = wasm.Table.fromIPCStream(ipc);
-    const bytes = wasm.writeParquet(wasmTable, writerProps);
+    const TableNS = wasm.Table;
+    if (!TableNS) {
+      throw new ParquetSourceError("parquet-wasm build does not expose Table.fromIPCStream.");
+    }
+    const wasmTable = TableNS.fromIPCStream(ipc);
+    const writeParquet = wasm.writeParquet;
+    if (!writeParquet) {
+      throw new ParquetSourceError("parquet-wasm build does not expose writeParquet.");
+    }
+    const bytes = writeParquet(wasmTable, writerProps);
 
     // parquet-wasm returns a Uint8Array (node) or a WebAssembly.Memory-backed
     // view; normalize to Uint8Array in both runtimes.
     if (bytes instanceof Uint8Array) return bytes;
     return new Uint8Array(bytes);
-  } catch (e: any) {
-    throw new ParquetSourceError(`Failed to write Parquet: ${e?.message ?? e}`);
+  } catch (e: unknown) {
+    throw new ParquetSourceError(`Failed to write Parquet: ${errorMessage(e)}`);
   }
 }
 

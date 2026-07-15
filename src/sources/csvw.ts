@@ -35,7 +35,7 @@ import type {
   StatusColumn,
 } from "../model/ir";
 import type { JsonStatDataset } from "../model/jsonstat";
-import { parseCsv, cubeColumns, serializeRows } from "./csv";
+import { cubeColumns, parseCsv, serializeRows } from "./csv";
 
 // ---------------------------------------------------------------------------
 // Errors & CSVW metadata types
@@ -213,7 +213,9 @@ export function csvwToCube(
   let statusIdx = cols.findIndex((c) => c.name === options.status);
   if (statusIdx === -1 && !options.status) {
     statusIdx = cols.findIndex(
-      (c) => c.name.toLowerCase() === "status" || roleFromPropertyUrl(c.propertyUrl) === undefined && c.name.toLowerCase() === "status",
+      (c) =>
+        c.name.toLowerCase() === "status" ||
+        (roleFromPropertyUrl(c.propertyUrl) === undefined && c.name.toLowerCase() === "status"),
     );
     if (statusIdx === measureIdx) statusIdx = -1;
   }
@@ -246,9 +248,7 @@ export function csvwToCube(
         dimensionIdxs.push(i);
       }
     } else {
-      dimensionIdxs = cols
-        .map((_, i) => i)
-        .filter((i) => i !== measureIdx && i !== statusIdx);
+      dimensionIdxs = cols.map((_, i) => i).filter((i) => i !== measureIdx && i !== statusIdx);
     }
   }
   if (dimensionIdxs.length === 0) {
@@ -285,7 +285,7 @@ export function csvwToCube(
   // Roles: metadata hints + propertyUrl inference + caller overrides.
   const roles: RoleMap = {};
   const addRole = (role: keyof RoleMap, id: string) => {
-    (roles[role] ??= []).push(id);
+    roles[role] = [...(roles[role] ?? []), id];
   };
   if (metadata["jsonstat:roles"]) {
     for (const r of ["time", "geo", "metric"] as const) {
@@ -369,9 +369,7 @@ export interface CsvwExport {
 }
 
 /** JSON-stat role → CSVW `propertyUrl` template fragment. */
-function propertyUrlForRole(
-  role: "time" | "geo" | "metric" | undefined,
-): string | undefined {
+function propertyUrlForRole(role: "time" | "geo" | "metric" | undefined): string | undefined {
   if (role === "time") return "schema:DateTime";
   if (role === "geo") return "schema:Place";
   if (role === "metric") return "schema:Measure";
@@ -379,10 +377,7 @@ function propertyUrlForRole(
 }
 
 /** Look up the role of a dimension id in the IR model. */
-function roleOf(
-  obs: Observations,
-  id: string,
-): "time" | "geo" | "metric" | undefined {
+function roleOf(obs: Observations, id: string): "time" | "geo" | "metric" | undefined {
   const roles = obs.model.roles;
   if (!roles) return undefined;
   if (roles.time?.includes(id)) return "time";
@@ -413,10 +408,7 @@ function roleOf(
  * const { csv, metadata } = cubeToCsvw(observations);
  * ```
  */
-export function cubeToCsvw(
-  obs: Observations,
-  options: CubeToCsvwOptions = {},
-): CsvwExport {
+export function cubeToCsvw(obs: Observations, options: CubeToCsvwOptions = {}): CsvwExport {
   const { header, rows } = cubeColumns(obs);
   const csv = serializeRows(header, rows, options);
 

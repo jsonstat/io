@@ -7,24 +7,27 @@
  * faithful inverses.
  */
 
-import { describe, it, expect } from "vitest";
 import {
-  Table,
+  Dictionary,
   Field,
-  Schema,
   Float64,
+  Int32,
+  Schema,
+  Table,
   Utf8,
   makeVector,
   vectorFromArray,
-  Dictionary,
-  Int32,
 } from "apache-arrow";
-import { arrowToCube, arrowToDataset, ArrowConversionError } from "../src/arrow/arrowToCube";
+import { describe, expect, it } from "vitest";
 import { cubeToArrow } from "../src/arrow/arrowFromCube";
-import { buildFieldMeta, buildSchemaMeta, getFieldMeta, getFieldRole } from "../src/arrow/schemaMeta";
-import { simpleObs, metadataObs, statusObs } from "./fixtures";
-import { buildDataset } from "../src/core/cubeBuilder";
-import type { Observations } from "../src/model/ir";
+import { ArrowConversionError, arrowToCube, arrowToDataset } from "../src/arrow/arrowToCube";
+import {
+  buildFieldMeta,
+  buildSchemaMeta,
+  getFieldMeta,
+  getFieldRole,
+} from "../src/arrow/schemaMeta";
+import { metadataObs, simpleObs, statusObs } from "./fixtures";
 
 // ---------------------------------------------------------------------------
 // Helpers: build Arrow tables from raw arrays
@@ -36,10 +39,7 @@ import type { Observations } from "../src/model/ir";
  */
 function buildSimpleTable(): Table {
   // Two dimension columns (dictionary-encoded) + one measure (Float64).
-  const sexVec = vectorFromArray(
-    ["M", "M", "F", "F"],
-    new Dictionary(new Utf8(), new Int32()),
-  );
+  const sexVec = vectorFromArray(["M", "M", "F", "F"], new Dictionary(new Utf8(), new Int32()));
   const yearVec = vectorFromArray(
     ["2020", "2021", "2020", "2021"],
     new Dictionary(new Utf8(), new Int32()),
@@ -173,13 +173,8 @@ describe("arrowToCube", () => {
   });
 
   it("throws when no numeric column exists (no measure candidate)", () => {
-    const sexVec = vectorFromArray(
-      ["M", "F"],
-      new Dictionary(new Utf8(), new Int32()),
-    );
-    const schema = new Schema([
-      new Field("sex", new Dictionary(new Utf8(), new Int32()), true),
-    ]);
+    const sexVec = vectorFromArray(["M", "F"], new Dictionary(new Utf8(), new Int32()));
+    const schema = new Schema([new Field("sex", new Dictionary(new Utf8(), new Int32()), true)]);
     const table = new Table(schema, { sex: sexVec });
     expect(() => arrowToCube(table)).toThrow(/No measure column/);
   });
@@ -265,9 +260,7 @@ describe("cubeToArrow", () => {
 
   it("attaches schema-level metadata", () => {
     const table = cubeToArrow(metadataObs());
-    expect(table.schema.metadata.get("jsonstat.label")).toBe(
-      "Population by country and year",
-    );
+    expect(table.schema.metadata.get("jsonstat.label")).toBe("Population by country and year");
     expect(table.schema.metadata.get("jsonstat.source")).toBe("Test");
   });
 
@@ -294,9 +287,7 @@ describe("Arrow round-trip (IR → Arrow → IR)", () => {
     expect(roundTripped.model.dimensionIds).toEqual(original.model.dimensionIds);
     // Dimension values should match.
     for (const id of original.model.dimensionIds) {
-      expect(roundTripped.dimensions[id].values).toEqual(
-        original.dimensions[id].values,
-      );
+      expect(roundTripped.dimensions[id].values).toEqual(original.dimensions[id].values);
     }
   });
 

@@ -6,14 +6,8 @@
  * against hand-computed positions and round-trip (flatPosition ↔ multiIndex).
  */
 
-import { describe, it, expect } from "vitest";
-import {
-  strides,
-  totalCells,
-  flatPosition,
-  multiIndex,
-  enumerateCells,
-} from "../src/core/strides";
+import { describe, expect, it } from "vitest";
+import { enumerateCells, flatPosition, multiIndex, strides, totalCells } from "../src/core/strides";
 
 describe("strides", () => {
   it("computes row-major strides (last dimension changes fastest)", () => {

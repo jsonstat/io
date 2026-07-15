@@ -133,19 +133,19 @@ export { loadInput } from "./util/fetch";
 
 import { tableFromIPC } from "apache-arrow";
 import type { Table } from "apache-arrow";
+import { cubeToArrow } from "./arrow/arrowFromCube";
+import { arrowToCube } from "./arrow/arrowToCube";
+import type { ArrowToCubeOptions } from "./arrow/arrowToCube";
 import { buildDataset } from "./core/cubeBuilder";
 import type { BuildOptions, BuildResult } from "./core/cubeBuilder";
-import type { JsonStatDataset } from "./model/jsonstat";
 import type { Observations } from "./model/ir";
+import type { JsonStatDataset } from "./model/jsonstat";
+import type { CsvwMetadata } from "./sources/csvw";
+import type { DataPackageMetadata } from "./sources/datapackage";
 import { detectFormat, detectFromBytes } from "./util/detect";
 import type { SourceFormat } from "./util/detect";
 import { loadInput } from "./util/fetch";
 import type { LoadedInput } from "./util/fetch";
-import { arrowToCube } from "./arrow/arrowToCube";
-import { cubeToArrow } from "./arrow/arrowFromCube";
-import type { ArrowToCubeOptions } from "./arrow/arrowToCube";
-import type { CsvwMetadata } from "./sources/csvw";
-import type { DataPackageMetadata } from "./sources/datapackage";
 
 /**
  * Options for the high-level [`importToCube`](#importtocube) /
@@ -300,20 +300,15 @@ export async function importToCube(
         try {
           const metaPath = siblingMetadataPath(loaded.source);
           const metaBytes = await loadInput(metaPath);
-          metadata = parseCsvwMetadata(
-            JSON.parse(new TextDecoder().decode(metaBytes.bytes)),
-          );
+          metadata = parseCsvwMetadata(JSON.parse(new TextDecoder().decode(metaBytes.bytes)));
         } catch {
           throw new ImporterError(
-            `CSVW metadata not supplied and could not be auto-loaded next to "${loaded.source}". ` +
-              'Pass options.csvwMetadata or set options.from = "csv".',
+            `CSVW metadata not supplied and could not be auto-loaded next to "${loaded.source}". Pass options.csvwMetadata or set options.from = "csv".`,
           );
         }
       }
       if (metadata === undefined) {
-        throw new ImporterError(
-          "CSVW source requires metadata. Pass options.csvwMetadata.",
-        );
+        throw new ImporterError("CSVW source requires metadata. Pass options.csvwMetadata.");
       }
       return csvwToCube(text, metadata, {
         measure: options.measure,
@@ -324,8 +319,9 @@ export async function importToCube(
     }
 
     case "datapackage": {
-      const { datapackageToCube, parseDataPackageMetadata, selectResource } =
-        await import("./sources/datapackage");
+      const { datapackageToCube, parseDataPackageMetadata, selectResource } = await import(
+        "./sources/datapackage"
+      );
       let metadata: DataPackageMetadata;
       let csvText: string | undefined;
       if (options.datapackageMetadata !== undefined) {
@@ -334,9 +330,7 @@ export async function importToCube(
         csvText = new TextDecoder().decode(loaded.bytes);
       } else {
         // Loaded bytes ARE the descriptor (the datapackage.json convention).
-        metadata = parseDataPackageMetadata(
-          JSON.parse(new TextDecoder().decode(loaded.bytes)),
-        );
+        metadata = parseDataPackageMetadata(JSON.parse(new TextDecoder().decode(loaded.bytes)));
       }
       const resourceOpts = {
         resourcePath: options.datapackageResourcePath,
@@ -388,10 +382,7 @@ export async function importToCube(
 
     default:
       throw new ImporterError(
-        `Could not detect the source format. Set options.from explicitly ` +
-          '(e.g. "parquet", "arrow", "csv", "csvw", "jsonstat"). ' +
-          "DuckDB and Polars require a live connection/DataFrame — use the " +
-          'dedicated subpath import (e.g. import { duckdbToCube } from "jsonstat-io/duckdb").',
+        `Could not detect the source format. Set options.from explicitly (e.g. "parquet", "arrow", "csv", "csvw", "jsonstat"). DuckDB and Polars require a live connection/DataFrame — use the dedicated subpath import (e.g. import { duckdbToCube } from "jsonstat-io/duckdb").`,
       );
   }
 }
@@ -445,13 +436,7 @@ function resolveSibling(basePath: string, relative: string): string {
 // ---------------------------------------------------------------------------
 
 /** Supported export sinks for [`exportDataset`](#exportdataset). */
-export type ExportTarget =
-  | "arrow"
-  | "parquet"
-  | "csv"
-  | "csvw"
-  | "jsv"
-  | "datapackage";
+export type ExportTarget = "arrow" | "parquet" | "csv" | "csvw" | "jsv" | "datapackage";
 
 /**
  * Options for [`exportDataset`](#exportdataset).
@@ -501,12 +486,7 @@ export interface ExportOptions {
  * - `"jsv"` → the CSV-stat (JSV) text (`string`).
  * - `"datapackage"` → `{ csv: string; metadata: DataPackageMetadata }`.
  */
-export type ExportResult =
-  | Table
-  | Uint8Array
-  | string
-  | CsvwExportShape
-  | DataPackageExportShape;
+export type ExportResult = Table | Uint8Array | string | CsvwExportShape | DataPackageExportShape;
 
 /** Shape of the `"csvw"` export result (mirrors `csvw.CsvwExport`). */
 export interface CsvwExportShape {
@@ -598,9 +578,7 @@ export async function exportDataset(
     }
     default:
       throw new ImporterError(
-        `Unsupported export target "${(options as { to?: string }).to}". ` +
-          'Use one of: "arrow", "parquet", "csv", "csvw", "jsv", "datapackage". ' +
-          "For DuckDB/Polars, use the dedicated subpath writers.",
+        `Unsupported export target "${(options as { to?: string }).to}". Use one of: "arrow", "parquet", "csv", "csvw", "jsv", "datapackage". For DuckDB/Polars, use the dedicated subpath writers.`,
       );
   }
 }

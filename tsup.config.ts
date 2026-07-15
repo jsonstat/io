@@ -1,5 +1,5 @@
-import { defineConfig, type Options } from "tsup";
 import path from "node:path";
+import { type Options, defineConfig } from "tsup";
 
 /**
  * Absolute path to the [`arrow-global`](./src/browser/arrow-global.ts) shim,

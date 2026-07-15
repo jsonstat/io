@@ -23,21 +23,21 @@
  */
 
 import {
-  DataType,
-  Field,
-  Table,
-  Vector,
-  Utf8,
-  Dictionary,
-  Int32,
-  Int64,
-  Float64,
-  Float32,
   Bool,
+  type DataType,
   DateDay,
   DateMillisecond,
-  TimestampSecond,
+  Dictionary,
+  type Field,
+  Float32,
+  Float64,
+  Int32,
+  Int64,
+  type Table,
   TimestampMillisecond,
+  TimestampSecond,
+  Utf8,
+  type Vector,
 } from "apache-arrow";
 import type {
   DimensionColumn,
@@ -46,6 +46,7 @@ import type {
   RoleMap,
   StatusColumn,
 } from "../model/ir";
+import type { Coordinates, JsonStatUnit } from "../model/jsonstat";
 import {
   getFieldMetaJson,
   getFieldRole,
@@ -53,7 +54,6 @@ import {
   isStatusField,
   readSchemaMeta,
 } from "./schemaMeta";
-import type { JsonStatUnit, Coordinates } from "../model/jsonstat";
 
 // ---------------------------------------------------------------------------
 // Errors & options
@@ -84,18 +84,13 @@ export interface ArrowToCubeOptions {
 // ---------------------------------------------------------------------------
 
 /** Is this Arrow data type a dictionary (the natural dimension representation)? */
-function isDictionaryType(t: DataType): t is Dictionary<any, any> {
+function isDictionaryType(t: DataType): t is Dictionary<DataType, Int32> {
   return t instanceof Dictionary;
 }
 
 /** Is this Arrow data type numeric (suitable for a measure)? */
 function isNumericType(t: DataType): boolean {
-  return (
-    t instanceof Int32 ||
-    t instanceof Int64 ||
-    t instanceof Float32 ||
-    t instanceof Float64
-  );
+  return t instanceof Int32 || t instanceof Int64 || t instanceof Float32 || t instanceof Float64;
 }
 
 /** Is this Arrow data type a string/utf8 (a fallback dimension type)? */
@@ -240,7 +235,7 @@ function resolveRoles(
 ): RoleMap {
   const roles: RoleMap = {};
   const add = (role: keyof RoleMap, id: string) => {
-    (roles[role] ??= []).push(id);
+    roles[role] = [...(roles[role] ?? []), id];
   };
 
   // 1. Field-level metadata roles.
@@ -293,10 +288,7 @@ function resolveRoles(
  *
  * @throws [`ArrowConversionError`](#arrowconversionerror) on mapping problems.
  */
-export function arrowToCube(
-  table: Table,
-  options: ArrowToCubeOptions = {},
-): Observations {
+export function arrowToCube(table: Table, options: ArrowToCubeOptions = {}): Observations {
   const rowCount = table.numRows;
   if (rowCount === 0) {
     throw new ArrowConversionError("Arrow table has no rows");
@@ -355,12 +347,7 @@ export function arrowToCube(
     // Every column that is not the measure or status, and is a dimension
     // candidate (dictionary/string/temporal/bool), becomes a dimension.
     dimensionNames = table.schema.fields
-      .filter(
-        (f) =>
-          f.name !== measureCol &&
-          f.name !== statusName &&
-          isDimensionCandidate(f.type),
-      )
+      .filter((f) => f.name !== measureCol && f.name !== statusName && isDimensionCandidate(f.type))
       .map((f) => f.name);
     if (dimensionNames.length === 0) {
       throw new ArrowConversionError(

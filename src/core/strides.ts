@@ -49,9 +49,7 @@ export function flatPosition(indices: number[], size: number[]): number {
   for (let d = 0; d < indices.length; d++) {
     const i = indices[d];
     if (i < 0 || i >= size[d]) {
-      throw new Error(
-        `flatPosition: index ${i} out of range [0,${size[d]}) for dimension ${d}`,
-      );
+      throw new Error(`flatPosition: index ${i} out of range [0,${size[d]}) for dimension ${d}`);
     }
     pos += i * s[d];
   }

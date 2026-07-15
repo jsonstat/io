@@ -21,11 +21,7 @@
  * [`strides`](./strides.ts).
  */
 
-import type {
-  DatasetMeta,
-  DimensionColumn,
-  Observations,
-} from "../model/ir";
+import type { DatasetMeta, DimensionColumn, Observations } from "../model/ir";
 import type {
   JsonStatCategory,
   JsonStatDataset,
@@ -86,9 +82,7 @@ function resolveDimension(id: string, column: DimensionColumn): ResolvedDimensio
     const known = new Set(column.categoryOrder);
     for (const v of column.values) {
       if (!known.has(v)) {
-        throw new CubeBuilderError(
-          `Dimension "${id}": value "${v}" not present in categoryOrder`,
-        );
+        throw new CubeBuilderError(`Dimension "${id}": value "${v}" not present in categoryOrder`);
       }
     }
     categories = column.categoryOrder.slice();
@@ -118,9 +112,10 @@ function resolveDimension(id: string, column: DimensionColumn): ResolvedDimensio
 // ---------------------------------------------------------------------------
 
 /** Build the JSON-stat `dimension` object and the `size` array. */
-function buildDimensionBlock(
-  resolved: ResolvedDimension[],
-): { dimension: Record<string, JsonStatDimension>; size: number[] } {
+function buildDimensionBlock(resolved: ResolvedDimension[]): {
+  dimension: Record<string, JsonStatDimension>;
+  size: number[];
+} {
   const dimension: Record<string, JsonStatDimension> = {};
   const size: number[] = [];
   for (const r of resolved) {
@@ -129,8 +124,7 @@ function buildDimensionBlock(
     cat.index = r.categories.slice();
     if (r.column.categoryLabels) cat.label = { ...r.column.categoryLabels };
     if (r.column.categoryUnits) cat.unit = { ...r.column.categoryUnits };
-    if (r.column.categoryCoordinates)
-      cat.coordinates = { ...r.column.categoryCoordinates };
+    if (r.column.categoryCoordinates) cat.coordinates = { ...r.column.categoryCoordinates };
     if (r.column.categoryChild) cat.child = { ...r.column.categoryChild };
 
     const dim: JsonStatDimension = { category: cat };
@@ -283,10 +277,7 @@ function emitStatus(
 }
 
 /** Build the sparse object status form. Omits `defaultStatus` entries. */
-function sparseStatus(
-  perCell: string[],
-  defaultStatus?: string,
-): Record<string, string> {
+function sparseStatus(perCell: string[], defaultStatus?: string): Record<string, string> {
   const obj: Record<string, string> = {};
   for (let i = 0; i < perCell.length; i++) {
     const s = perCell[i];

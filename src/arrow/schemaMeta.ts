@@ -39,10 +39,7 @@
  */
 
 import type { Field, Schema } from "apache-arrow";
-import type {
-  DatasetMeta,
-  RoleMap,
-} from "../model/ir";
+import type { DatasetMeta, RoleMap } from "../model/ir";
 import type { JsonStatRole } from "../model/jsonstat";
 
 /** Metadata namespace prefix used for all JSON-stat keys. */
@@ -181,8 +178,7 @@ export function buildSchemaMeta(hints: {
   if (hints.label) meta.set(`${META_PREFIX}label`, hints.label);
   if (hints.source) meta.set(`${META_PREFIX}source`, hints.source);
   if (hints.updated) meta.set(`${META_PREFIX}updated`, hints.updated);
-  if (hints.extension)
-    meta.set(`${META_PREFIX}extension`, JSON.stringify(hints.extension));
+  if (hints.extension) meta.set(`${META_PREFIX}extension`, JSON.stringify(hints.extension));
   if (hints.roles) meta.set(`${META_PREFIX}roles`, JSON.stringify(hints.roles));
   if (hints.valueForm) meta.set(`${META_PREFIX}valueForm`, hints.valueForm);
   return meta;

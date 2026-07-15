@@ -66,7 +66,11 @@ export function detectFromBytes(bytes: Uint8Array | ArrayBuffer): SourceFormat {
     return "json";
   }
   // CSV-stat (JSV): first line starts with the `jsonstat,` tag.
-  if (text.startsWith("jsonstat,") || text.startsWith("jsonstat\r") || text.startsWith("jsonstat\n")) {
+  if (
+    text.startsWith("jsonstat,") ||
+    text.startsWith("jsonstat\r") ||
+    text.startsWith("jsonstat\n")
+  ) {
     return "jsv";
   }
   // CSV: presence of a delimiter and typical header-ish content is weak; defer

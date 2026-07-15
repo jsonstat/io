@@ -35,12 +35,7 @@
  * ```
  */
 
-import type {
-  DatasetMeta,
-  DimensionColumn,
-  Observations,
-  RoleMap,
-} from "../model/ir";
+import type { DatasetMeta, DimensionColumn, Observations, RoleMap } from "../model/ir";
 import type { JsonStatDataset, JsonStatUnit } from "../model/jsonstat";
 import { parseCsv, quoteCsvField } from "./csv";
 
@@ -135,9 +130,7 @@ function parseDimensionRow(row: string[], unitSep: string): DimMeta {
   const label = row[2];
   const size = Number(row[3]);
   if (!Number.isFinite(size) || size < 0) {
-    throw new CsvStatSourceError(
-      `Invalid dimension size "${row[3]}" for dimension "${id}"`,
-    );
+    throw new CsvStatSourceError(`Invalid dimension size "${row[3]}" for dimension "${id}"`);
   }
 
   const categoryOrder: string[] = [];
@@ -231,9 +224,7 @@ export function csvstatToCube(text: string, options: CsvStatToCubeOptions = {}):
   // The first line must be the `jsonstat` line.
   const first = rows[0];
   if (first[0] !== "jsonstat") {
-    throw new CsvStatSourceError(
-      `Expected first line tag "jsonstat", got "${first[0] ?? ""}"`,
-    );
+    throw new CsvStatSourceError(`Expected first line tag "jsonstat", got "${first[0] ?? ""}"`);
   }
   const decimal = options.decimal ?? first[1] ?? ".";
   const unitSep = first[2] ?? "|";
@@ -346,9 +337,9 @@ export function csvstatToCube(text: string, options: CsvStatToCubeOptions = {}):
   const roles: RoleMap = {};
   for (const { id } of dimCols) {
     const r = dimMap.get(id)?.role;
-    if (r === "time") (roles.time ??= []).push(id);
-    else if (r === "geo") (roles.geo ??= []).push(id);
-    else if (r === "metric") (roles.metric ??= []).push(id);
+    if (r === "time") roles.time = [...(roles.time ?? []), id];
+    else if (r === "geo") roles.geo = [...(roles.geo ?? []), id];
+    else if (r === "metric") roles.metric = [...(roles.metric ?? []), id];
   }
 
   const metaClean: DatasetMeta = {};

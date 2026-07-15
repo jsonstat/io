@@ -67,7 +67,9 @@ Dataset metadata:
       --updated <date>     Dataset last-updated date (ISO 8601).
 
 Output:
-  -o, --output <file>      Write to file instead of stdout.
+  -o, --output <file>      Write to file instead of stdout. For `--to csvw|datapackage`
+                           the resource name/path in the descriptor are derived from
+                           this stem (e.g. `-o cube.csv` → name "cube", path "cube.csv").
       --pretty             Pretty-print JSON (default: true).
       --no-pretty          Compact JSON output (single line).
       --canonical-keys     Reorder top-level keys canonically (default: true).
@@ -78,7 +80,13 @@ CSV/CSVW/Data Package:
       --csvw-metadata <json>       Inline CSVW metadata as a JSON string.
       --datapackage-metadata <json>  Inline Data Package descriptor as a JSON string
                                     (the CLI then reads the CSV body from [input]).
-      --delimiter <char>           CSV delimiter (default: ",").
+      --delimiter <char>           CSV/CSVW/CSV-stat/Data Package delimiter (default: ",").
+
+Export-only (CSV-stat/CSV/CSVW/Data Package):
+      --decimal <char>             CSV-stat (JSV) decimal mark (default: ".").
+      --unit-sep <char>            CSV-stat (JSV) unit-column separator (default: "|").
+      --line-terminator <eol>      Line terminator for export: "\r\n" (default) or "\n"
+                                   (also accepts lf / crlf).
 ```
 
 ## Exit codes
@@ -164,6 +172,12 @@ npx jsonstat-io ./sales.jsonstat.json --to csvw -o sales.csvw
 npx jsonstat-io ./sales.jsonstat.json --to datapackage -o sales.csv
 # writes sales.csv and datapackage.json (sibling)
 ```
+
+The resource `name` and `path` in the descriptor are derived from the `-o` stem:
+`-o sales.csv` produces `"name": "sales"` and `"path": "sales.csv"`, so the
+descriptor references the CSV that is actually written (round-trippable). When
+`-o` is omitted (stdout output), the writer falls back to a slug of the dataset
+label and `"data.csv"`.
 
 ### Validate the output
 

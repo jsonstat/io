@@ -20,7 +20,6 @@
  * @module
  */
 
-import type { JsonStatDataset } from "../model/jsonstat";
 import type {
   DimensionColumn,
   MeasureColumn,
@@ -28,7 +27,8 @@ import type {
   RoleMap,
   StatusColumn,
 } from "../model/ir";
-import { parseCsv, cubeColumns, serializeRows } from "./csv";
+import type { JsonStatDataset } from "../model/jsonstat";
+import { cubeColumns, parseCsv, serializeRows } from "./csv";
 
 // ---------------------------------------------------------------------------
 // Error
@@ -248,9 +248,7 @@ export function datapackageToCube(
 ): Observations {
   const resource = selectResource(metadata, options);
   if (!resource.schema?.fields?.length) {
-    throw new DataPackageSourceError(
-      "Selected resource is missing schema.fields",
-    );
+    throw new DataPackageSourceError("Selected resource is missing schema.fields");
   }
   const fields = resource.schema.fields;
   const missingValues = new Set(resource.schema.missingValues ?? [""]);
@@ -332,9 +330,7 @@ export function datapackageToCube(
         dimensionIdxs.push(i);
       }
     } else {
-      dimensionIdxs = fields
-        .map((_, i) => i)
-        .filter((i) => i !== measureIdx && i !== statusIdx);
+      dimensionIdxs = fields.map((_, i) => i).filter((i) => i !== measureIdx && i !== statusIdx);
     }
   }
   if (dimensionIdxs.length === 0) {
@@ -347,9 +343,7 @@ export function datapackageToCube(
     const f = fields[idx];
     dimensions[f.name] = {
       id: f.name,
-      values: columnValues[idx].map((v) =>
-        missingValues.has(v) ? "" : v,
-      ),
+      values: columnValues[idx].map((v) => (missingValues.has(v) ? "" : v)),
       label: fieldTitle(f),
     };
   }
@@ -372,7 +366,7 @@ export function datapackageToCube(
   // --- Roles: metadata hints + rdfType inference + caller overrides ------
   const roles: RoleMap = {};
   const addRole = (role: keyof RoleMap, id: string) => {
-    (roles[role] ??= []).push(id);
+    roles[role] = [...(roles[role] ?? []), id];
   };
   if (metadata["jsonstat:roles"]) {
     for (const r of ["time", "geo", "metric"] as const) {
@@ -427,9 +421,7 @@ export async function datapackageToDataset(
 export function parseDataPackageMetadata(json: unknown): DataPackageMetadata {
   const m = json as DataPackageMetadata;
   if (!m || !Array.isArray(m.resources)) {
-    throw new DataPackageSourceError(
-      "Invalid Data Package: missing resources[]",
-    );
+    throw new DataPackageSourceError("Invalid Data Package: missing resources[]");
   }
   return m;
 }
@@ -458,10 +450,7 @@ export interface DataPackageExport {
 }
 
 /** Look up the role of a dimension id in the IR model. */
-function roleOf(
-  obs: Observations,
-  id: string,
-): "time" | "geo" | "metric" | undefined {
+function roleOf(obs: Observations, id: string): "time" | "geo" | "metric" | undefined {
   const roles = obs.model.roles;
   if (!roles) return undefined;
   if (roles.time?.includes(id)) return "time";
@@ -471,9 +460,7 @@ function roleOf(
 }
 
 /** Map a JSON-stat role to an rdfType URL hint on a field. */
-function rdfTypeForRole(
-  role: "time" | "geo" | "metric" | undefined,
-): string | undefined {
+function rdfTypeForRole(role: "time" | "geo" | "metric" | undefined): string | undefined {
   if (role === "time") return "https://schema.org/DateTime";
   if (role === "geo") return "https://schema.org/Place";
   if (role === "metric") return "https://schema.org/Measure";
@@ -482,12 +469,14 @@ function rdfTypeForRole(
 
 /** Turn a label into a URL-safe slug for the package `name`. */
 function slugify(label: string): string {
-  return label
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64) || "dataset";
+  return (
+    label
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "dataset"
+  );
 }
 
 /**

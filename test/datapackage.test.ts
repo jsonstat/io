@@ -8,25 +8,26 @@
  *  - Round-trip via the high-level `exportDataset` / `importToCube` dispatcher.
  */
 
-import { describe, it, expect } from "vitest";
-import {
-  datapackageToCube,
-  cubeToDataPackage,
-  parseDataPackageMetadata,
-  DataPackageSourceError,
-} from "../src/sources/datapackage";
-import type { DataPackageMetadata } from "../src/sources/datapackage";
-import { exportDataset, importToCube } from "../src/index";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
+import { run } from "../src/cli/index";
 import { buildDataset } from "../src/core/cubeBuilder";
-import { simpleDataset } from "./fixtures";
+import { exportDataset, importToCube } from "../src/index";
 import type { Observations } from "../src/model/ir";
 import type { JsonStatValue } from "../src/model/jsonstat";
+import {
+  DataPackageSourceError,
+  cubeToDataPackage,
+  datapackageToCube,
+  parseDataPackageMetadata,
+} from "../src/sources/datapackage";
+import type { DataPackageMetadata } from "../src/sources/datapackage";
+import { simpleDataset } from "./fixtures";
 
 /** Materialize a dense or sparse value array into a flat (number|null)[]. */
-function materialize(
-  value: JsonStatValue,
-  total: number,
-): (number | null)[] {
+function materialize(value: JsonStatValue, total: number): (number | null)[] {
   if (Array.isArray(value)) return value;
   const dense = new Array(total).fill(null);
   for (const [k, v] of Object.entries(value)) {
@@ -69,11 +70,7 @@ function simplePackage(): DataPackageMetadata {
 }
 
 const SIMPLE_CSV =
-  "sex,year,value,count\n" +
-  "M,2020,10,1\n" +
-  "M,2021,20,2\n" +
-  "F,2020,30,3\n" +
-  "F,2021,40,4\n";
+  "sex,year,value,count\n" + "M,2020,10,1\n" + "M,2021,20,2\n" + "F,2020,30,3\n" + "F,2021,40,4\n";
 
 // ---------------------------------------------------------------------------
 // Import — schema-driven detection
@@ -279,9 +276,7 @@ describe("parseDataPackageMetadata", () => {
   });
 
   it("throws when resources[] is missing", () => {
-    expect(() => parseDataPackageMetadata({ name: "x" })).toThrow(
-      DataPackageSourceError,
-    );
+    expect(() => parseDataPackageMetadata({ name: "x" })).toThrow(DataPackageSourceError);
   });
 });
 
@@ -303,7 +298,7 @@ describe("cubeToDataPackage", () => {
   }
 
   it("emits a descriptor with a single resource, fields, and primaryKey", () => {
-    const { csv, metadata } = cubeToDataPackage(simpleObsIr());
+    const { metadata } = cubeToDataPackage(simpleObsIr());
     expect(metadata.name).toBeTruthy();
     expect(metadata.resources.length).toBe(1);
     const resource = metadata.resources[0];
@@ -333,9 +328,7 @@ describe("cubeToDataPackage", () => {
     const obs = simpleObsIr();
     obs.model.roles = { time: ["year"] };
     const { metadata } = cubeToDataPackage(obs);
-    const yearField = metadata.resources[0].schema!.fields.find(
-      (f) => f.name === "year",
-    );
+    const yearField = metadata.resources[0].schema!.fields.find((f) => f.name === "year");
     expect(yearField?.rdfType).toContain("DateTime");
   });
 
@@ -381,5 +374,59 @@ describe("exportDataset/importToCube round-trip — Data Package", () => {
         expect(got[i]).toBeCloseTo(orig[i] as number, 6);
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI integration: --to datapackage -o <name>.csv respects the output name
+// (regression for https://github.com/jsonstat/io — 0.3.1: the descriptor
+// previously hardcoded name="data"/path="data.csv" regardless of -o).
+// ---------------------------------------------------------------------------
+
+const TMP = mkdtempSync(join(tmpdir(), "jsonstat-io-datapackage-"));
+afterAll(() => {
+  rmSync(TMP, { recursive: true, force: true });
+});
+
+describe("CLI --to datapackage -o derives the resource name/path", () => {
+  it("writes a descriptor whose name/path reflect the -o stem", async () => {
+    const inputPath = join(TMP, "in.jsonstat.json");
+    writeFileSync(inputPath, JSON.stringify(simpleDataset()), "utf8");
+    const outputPath = join(TMP, "cube.csv");
+
+    const result = await run(inputPath, {
+      to: "datapackage",
+      output: outputPath,
+    });
+
+    expect(result.direction).toBe("export");
+    // The descriptor is written as a sibling of the CSV.
+    const descriptorPath = join(TMP, "datapackage.json");
+    const descriptor = JSON.parse(readFileSync(descriptorPath, "utf8")) as DataPackageMetadata;
+
+    expect(descriptor.name).toBe("cube");
+    expect(descriptor.resources[0].path).toBe("cube.csv");
+    expect(descriptor.resources[0].name).toBe("cube");
+    // The CSV actually exists at the -o location.
+    const csvText = readFileSync(outputPath, "utf8");
+    expect(csvText).toContain("sex,year,value");
+  });
+
+  it("descriptor and on-disk CSV round-trip (import finds the file)", async () => {
+    const inputPath = join(TMP, "rt-in.jsonstat.json");
+    writeFileSync(inputPath, JSON.stringify(simpleDataset()), "utf8");
+    const outputPath = join(TMP, "rt.csv");
+
+    await run(inputPath, { to: "datapackage", output: outputPath });
+
+    // Re-import via Mode B: the descriptor's `path` must resolve to a CSV that
+    // exists next to it. This previously failed because path was "data.csv".
+    const descriptorPath = join(TMP, "datapackage.json");
+    const obs = await importToCube(descriptorPath, {
+      from: "datapackage",
+    });
+    const result = buildDataset(obs).dataset;
+    expect(result.id).toEqual(simpleDataset().id);
+    expect(result.size).toEqual(simpleDataset().size);
   });
 });

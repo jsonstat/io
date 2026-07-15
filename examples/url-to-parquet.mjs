@@ -65,8 +65,7 @@ async function main() {
       // DEFAULT export (not a named `init`). Prefer it; fall back to a named
       // `init` for builds that expose one. The call is idempotent.
       const wasm = await import("parquet-wasm");
-      const initialize =
-        typeof wasm.default === "function" ? wasm.default : wasm.init;
+      const initialize = typeof wasm.default === "function" ? wasm.default : wasm.init;
       if (typeof initialize === "function") await initialize();
     },
   });

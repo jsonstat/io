@@ -1,6 +1,6 @@
 {
   "name": "jsonstat-io",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Bidirectional bridge between the columnar stack (Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, CSV-stat, Data Package) and JSON-stat 2.0 cubes. An Arrow-hubbed interop layer for the lakehouse ecosystem.",
   "license": "Apache-2.0",
   "author": "Xavier Badosa",
@@ -94,12 +94,7 @@
   "bin": {
     "jsonstat-io": "./dist/cli/index.js"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE",
-    "docs"
-  ],
+  "files": ["dist", "README.md", "LICENSE", "docs"],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

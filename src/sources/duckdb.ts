@@ -20,11 +20,11 @@
  * `@duckdb/duckdb-wasm` and `duckdb-async` are **optional peer dependencies**.
  */
 
+import type { Table } from "apache-arrow";
+import { cubeToArrow } from "../arrow/arrowFromCube";
+import { type ArrowToCubeOptions, arrowToCube } from "../arrow/arrowToCube";
 import type { Observations } from "../model/ir";
 import type { JsonStatDataset } from "../model/jsonstat";
-import { arrowToCube, type ArrowToCubeOptions } from "../arrow/arrowToCube";
-import { cubeToArrow } from "../arrow/arrowFromCube";
-import type { Table } from "apache-arrow";
 
 // ---------------------------------------------------------------------------
 // Errors & types
@@ -43,15 +43,15 @@ export class DuckdbSourceError extends Error {
  */
 export interface DuckdbConnection {
   /** Run a SQL query and return an Apache Arrow Table. */
-  arrow(query: string): Promise<any>;
+  arrow(query: string): Promise<Table>;
   /**
    * Register an Arrow Table under a view name (duckdb-async style). Optional:
    * the export path falls back to `insert_arrow_table` / `conn.register` if
    * this is absent.
    */
-  register?(viewName: string, table: any): Promise<void>;
+  register?(viewName: string, table: Table): Promise<void>;
   /** DuckDB-wasm style: insert an Arrow Table into a named table. */
-  insert_arrow_table?(table: any, options?: { name?: string }): Promise<void>;
+  insert_arrow_table?(table: Table, options?: { name?: string }): Promise<void>;
   /** Run an arbitrary SQL statement (no Arrow result). */
   run?(query: string): Promise<unknown>;
   close?(): Promise<void>;
@@ -74,15 +74,22 @@ export interface DuckdbToCubeOptions extends ArrowToCubeOptions {
  * DuckDB bindings return Arrow tables via differently-named methods
  * (`arrowResult`, `arrow`, `all`+manual). Try the common ones in order.
  */
-async function runQuery(conn: DuckdbConnection, query: string): Promise<any> {
-  if (typeof (conn as any).arrow === "function") {
-    return await (conn as any).arrow(query);
+async function runQuery(conn: DuckdbConnection, query: string): Promise<Table> {
+  if (typeof conn.arrow === "function") {
+    return await conn.arrow(query);
   }
-  if (typeof (conn as any).arrowResult === "function") {
-    const res = await (conn as any).arrowResult(query);
+  // duckdb-wasm connections expose arrowResult() instead of arrow(); probe the
+  // extra method via an optional structural extension not declared on the base.
+  const ext = conn as DuckdbConnection & {
+    arrowResult?: (q: string) => Promise<unknown>;
+  };
+  if (typeof ext.arrowResult === "function") {
+    const res = await ext.arrowResult(query);
     // duckdb-wasm: result is either a Table or has .getAll() / .arrow()
-    if (res && typeof res.arrow === "function") return await res.arrow();
-    return res;
+    if (res && typeof (res as { arrow?: unknown }).arrow === "function") {
+      return await (res as { arrow: () => Promise<Table> }).arrow();
+    }
+    return res as Table;
   }
   throw new DuckdbSourceError(
     "DuckDB connection has no arrow()/arrowResult() method; cannot fetch Arrow result",
@@ -114,12 +121,12 @@ export async function duckdbToCube(
     ownsConn = true;
   }
 
-  let table: any;
+  let table: Table | undefined;
   try {
     table = await runQuery(conn, query);
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (ownsConn && conn.close) await conn.close().catch(() => {});
-    throw new DuckdbSourceError(`DuckDB query failed: ${e?.message ?? e}`);
+    throw new DuckdbSourceError(`DuckDB query failed: ${errorMessage(e)}`);
   }
 
   if (ownsConn && conn.close) await conn.close().catch(() => {});
@@ -145,14 +152,22 @@ export async function duckdbToDataset(
  */
 export async function openDuckdbNode(path = ":memory:"): Promise<DuckdbConnection> {
   try {
-    const mod: any = await import("duckdb-async");
+    const mod = (await import("duckdb-async")) as unknown as {
+      createDb: (p: string) => Promise<{ connect: () => Promise<DuckdbConnection> }>;
+    };
     const db = await mod.createDb(path);
-    return (await db.connect()) as DuckdbConnection;
+    return await db.connect();
   } catch {
     throw new DuckdbSourceError(
       "duckdb-async is not installed. Install it with `npm i duckdb-async` for Node usage.",
     );
   }
+}
+
+/** Extract a human-readable message from a caught value of unknown type. */
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return String(e);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,22 +271,18 @@ export async function cubeToDuckdb(
         // DuckDB can register the Arrow table temporarily, then CTAS from it.
         const tempView = `__jsonstat_io_${tableName}_${Date.now()}`;
         await registerArrowTable(conn, table, tempView, "view");
-        await conn.run(
-          `CREATE TABLE ${ident} AS SELECT * FROM ${quoteIdent(tempView)};`,
-        );
+        await conn.run(`CREATE TABLE ${ident} AS SELECT * FROM ${quoteIdent(tempView)};`);
         // Best-effort drop of the temp view; ignore errors.
         if (typeof conn.run === "function") {
-          await conn.run(`DROP VIEW IF EXISTS ${quoteIdent(tempView)};`).catch(
-            () => {},
-          );
+          await conn.run(`DROP VIEW IF EXISTS ${quoteIdent(tempView)};`).catch(() => {});
         }
         return tableName;
       }
     }
     await registerArrowTable(conn, table, tableName, mode);
     return tableName;
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e instanceof DuckdbSourceError) throw e;
-    throw new DuckdbSourceError(`DuckDB export failed: ${e?.message ?? e}`);
+    throw new DuckdbSourceError(`DuckDB export failed: ${errorMessage(e)}`);
   }
 }

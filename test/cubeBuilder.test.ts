@@ -6,20 +6,10 @@
  * category ordering, roles, metadata, status, and the reader's inverse.
  */
 
-import { describe, it, expect } from "vitest";
-import {
-  buildDataset,
-  toDataset,
-  CubeBuilderError,
-} from "../src/core/cubeBuilder";
-import { readDataset, CubeReaderError } from "../src/core/cubeReader";
-import {
-  simpleObs,
-  simpleDataset,
-  sparseObs,
-  metadataObs,
-  statusObs,
-} from "./fixtures";
+import { describe, expect, it } from "vitest";
+import { CubeBuilderError, buildDataset, toDataset } from "../src/core/cubeBuilder";
+import { CubeReaderError, readDataset } from "../src/core/cubeReader";
+import { metadataObs, simpleDataset, simpleObs, sparseObs, statusObs } from "./fixtures";
 
 // ---------------------------------------------------------------------------
 // buildDataset — the primary IR→Dataset path
@@ -349,9 +339,9 @@ describe("readDataset", () => {
   });
 
   it("throws on non-dataset class", () => {
-    expect(() =>
-      readDataset({ version: "2.0", class: "collection" } as never),
-    ).toThrow(CubeReaderError);
+    expect(() => readDataset({ version: "2.0", class: "collection" } as never)).toThrow(
+      CubeReaderError,
+    );
   });
 
   it("throws on value array / size mismatch", () => {

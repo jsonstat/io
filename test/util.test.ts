@@ -3,17 +3,17 @@
  * decision (density.ts), plus the serializer (serialize.ts).
  */
 
-import { describe, it, expect } from "vitest";
-import {
-  detectFromBytes,
-  detectFromExtension,
-  detectFormat,
-  extensionOf,
-} from "../src/util/detect";
-import { decideDensity } from "../src/util/density";
+import { describe, expect, it } from "vitest";
 import { serialize } from "../src/sink/serialize";
 import { csvToCube } from "../src/sources/csv";
 import { csvwToCube, parseCsvwMetadata } from "../src/sources/csvw";
+import { decideDensity } from "../src/util/density";
+import {
+  detectFormat,
+  detectFromBytes,
+  detectFromExtension,
+  extensionOf,
+} from "../src/util/detect";
 import { simpleDataset } from "./fixtures";
 
 // ---------------------------------------------------------------------------
@@ -23,7 +23,14 @@ import { simpleDataset } from "./fixtures";
 describe("detectFromBytes", () => {
   it("detects Arrow IPC by the ARROW1 magic bytes", () => {
     const arrowBytes = new Uint8Array([
-      0x41, 0x52, 0x52, 0x4f, 0x57, 0x31, 0x00, 0x00, // "ARROW1\0\0"
+      0x41,
+      0x52,
+      0x52,
+      0x4f,
+      0x57,
+      0x31,
+      0x00,
+      0x00, // "ARROW1\0\0"
     ]);
     expect(detectFromBytes(arrowBytes)).toBe("arrow");
   });
@@ -105,16 +112,12 @@ describe("detectFormat", () => {
   });
 
   it("falls back to byte sniffing when extension is unknown", () => {
-    const arrowBytes = new Uint8Array([
-      0x41, 0x52, 0x52, 0x4f, 0x57, 0x31, 0x00, 0x00,
-    ]);
+    const arrowBytes = new Uint8Array([0x41, 0x52, 0x52, 0x4f, 0x57, 0x31, 0x00, 0x00]);
     expect(detectFormat("file-with-no-ext", arrowBytes)).toBe("arrow");
   });
 
   it("falls back to byte sniffing when no path is given", () => {
-    const arrowBytes = new Uint8Array([
-      0x41, 0x52, 0x52, 0x4f, 0x57, 0x31, 0x00, 0x00,
-    ]);
+    const arrowBytes = new Uint8Array([0x41, 0x52, 0x52, 0x4f, 0x57, 0x31, 0x00, 0x00]);
     expect(detectFormat(undefined, arrowBytes)).toBe("arrow");
   });
 

@@ -27,22 +27,19 @@
  */
 
 import {
-  Table,
-  Field,
-  Schema,
-  Float64,
-  Utf8,
   Dictionary,
+  Field,
+  Float64,
   Int32,
-  vectorFromArray,
+  Schema,
+  Table,
+  Utf8,
+  type Vector,
   makeVector,
-  Vector,
+  vectorFromArray,
 } from "apache-arrow";
-import type {
-  DimensionColumn,
-  Observations,
-} from "../model/ir";
-import type { JsonStatUnit, Coordinates } from "../model/jsonstat";
+import type { DimensionColumn, Observations } from "../model/ir";
+import type { Coordinates, JsonStatUnit } from "../model/jsonstat";
 import { buildFieldMeta, buildSchemaMeta } from "./schemaMeta";
 
 // ---------------------------------------------------------------------------
@@ -57,9 +54,11 @@ import { buildFieldMeta, buildSchemaMeta } from "./schemaMeta";
  * of a categorical dimension, and what [`arrowToCube`](./arrowToCube.ts) reads
  * back losslessly.
  */
-function buildDimensionColumn(
-  col: DimensionColumn,
-): { name: string; vector: Vector; field: Field } {
+function buildDimensionColumn(col: DimensionColumn): {
+  name: string;
+  vector: Vector;
+  field: Field;
+} {
   // Enumerate the canonical category order: explicit if given, else
   // first-seen. This is attached to the field metadata so arrowToCube can
   // restore the exact order on the round-trip.
@@ -67,10 +66,7 @@ function buildDimensionColumn(
 
   // Build the dictionary vector from the raw string values. arrowToCube reads
   // the dictionary values for category IDs and the metadata for ordering.
-  const vector = vectorFromArray(
-    col.values,
-    new Dictionary(new Utf8(), new Int32()),
-  );
+  const vector = vectorFromArray(col.values, new Dictionary(new Utf8(), new Int32()));
 
   // Field metadata preserving the JSON-stat dimension model.
   const metadata = buildFieldMeta({
@@ -82,12 +78,7 @@ function buildDimensionColumn(
     categoryOrder: col.categoryOrder ?? (order.length > 0 ? order : undefined),
   });
 
-  const field = new Field(
-    col.id,
-    new Dictionary(new Utf8(), new Int32()),
-    true,
-    metadata,
-  );
+  const field = new Field(col.id, new Dictionary(new Utf8(), new Int32()), true, metadata);
 
   return { name: col.id, vector, field };
 }
@@ -218,16 +209,18 @@ function buildNullableFloat64Vector(values: (number | null)[]): Vector {
   for (let i = 0; i < n; i++) {
     if (values[i] !== null) {
       data[i] = values[i] as number;
-      nullBitmap[Math.floor(i / 8)] |= 1 << i % 8;
+      nullBitmap[Math.floor(i / 8)] |= 1 << (i % 8);
     }
   }
+  // makeVector's options union is intentionally broad across Arrow versions; the
+  // object above is a valid Float64 init, so we widen via a typed shim.
   const vector = makeVector({
     type: new Float64(),
     data,
     nullBitmap,
     length: n,
     nullCount,
-  } as any);
+  } as Parameters<typeof makeVector>[0]);
   return vector;
 }
 

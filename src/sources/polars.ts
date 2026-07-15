@@ -17,11 +17,11 @@
  * `nodejs-polars` import is lazy, so the failure only happens on use).
  */
 
+import type { Table } from "apache-arrow";
+import { cubeToArrow } from "../arrow/arrowFromCube";
+import { type ArrowToCubeOptions, arrowToCube } from "../arrow/arrowToCube";
 import type { Observations } from "../model/ir";
 import type { JsonStatDataset } from "../model/jsonstat";
-import { arrowToCube, type ArrowToCubeOptions } from "../arrow/arrowToCube";
-import { cubeToArrow } from "../arrow/arrowFromCube";
-import type { Table } from "apache-arrow";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -41,10 +41,31 @@ export class PolarsSourceError extends Error {
 export interface PolarsToCubeOptions extends ArrowToCubeOptions {
   /**
    * Polars frames expose different Arrow conversion methods across versions
-   * (`toArrow()`, `toRecords()`, etc.). The adapter tries them in order; this
+   * (`toArrow()`, `toIPC()`, etc.). The adapter tries them in order; this
    * option forces a specific one. Usually unnecessary.
    */
   arrowMethod?: "toArrow" | "toIPC" | "auto";
+}
+
+/**
+ * Structural surface of a `nodejs-polars` `DataFrame` as used by this adapter.
+ * `nodejs-polars` is an optional peer with a heavy native binding; we model
+ * only the conversion methods we probe for, so callers can pass any object with
+ * a compatible shape without a hard static dependency.
+ */
+export interface PolarsDataFrame {
+  toArrow?(): Table | Promise<Table>;
+  toIPC?(): Uint8Array | ArrayBuffer | Promise<Uint8Array | ArrayBuffer>;
+  [method: string]: unknown;
+}
+
+/**
+ * Structural surface of the `nodejs-polars` module (`pl`): the constructors we
+ * call when building a DataFrame from an Arrow Table.
+ */
+export interface PolarsModule {
+  fromArrow?(table: Table): PolarsDataFrame | Promise<PolarsDataFrame>;
+  readIPC?(buf: Uint8Array | ArrayBuffer): PolarsDataFrame | Promise<PolarsDataFrame>;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,33 +77,35 @@ export interface PolarsToCubeOptions extends ArrowToCubeOptions {
  * methods. We do NOT statically import `nodejs-polars` — the caller passes a
  * DataFrame object, keeping this module free of a hard dependency.
  */
-async function polarsToArrow(df: any, method: PolarsToCubeOptions["arrowMethod"]): Promise<any> {
+async function polarsToArrow(
+  df: PolarsDataFrame,
+  method: PolarsToCubeOptions["arrowMethod"],
+): Promise<Table | undefined> {
   const tried: string[] = [];
-  const tryMethod = async (name: string): Promise<any> => {
-    if (typeof df[name] !== "function") {
+  const tryMethod = async (name: "toArrow" | "toIPC"): Promise<unknown> => {
+    const fn = df[name];
+    if (typeof fn !== "function") {
       tried.push(name);
       return undefined;
     }
-    const result = await df[name]();
-    return result;
+    return await (fn as (...args: unknown[]) => unknown).call(df);
   };
 
   if (method === "toArrow" || method === "auto" || method === undefined) {
     const t = await tryMethod("toArrow");
-    if (t) return t;
+    if (t) return t as Table;
   }
   if (method === "toIPC" || method === "auto" || method === undefined) {
     const ipc = await tryMethod("toIPC");
     if (ipc) {
       // IPC bytes → Arrow Table via apache-arrow's readIPC (lazy import).
       const { tableFromIPC } = await import("apache-arrow");
-      return tableFromIPC(ipc);
+      return tableFromIPC(ipc as unknown as Parameters<typeof tableFromIPC>[0]) as Table;
     }
   }
 
   throw new PolarsSourceError(
-    `Could not obtain an Arrow Table from the Polars DataFrame (tried: ${tried.join(", ")}). ` +
-      "Ensure nodejs-polars is installed and the DataFrame supports toArrow()/toIPC().",
+    `Could not obtain an Arrow Table from the Polars DataFrame (tried: ${tried.join(", ")}). Ensure nodejs-polars is installed and the DataFrame supports toArrow()/toIPC().`,
   );
 }
 
@@ -98,7 +121,7 @@ async function polarsToArrow(df: any, method: PolarsToCubeOptions["arrowMethod"]
  * @throws [`PolarsSourceError`] if Arrow extraction fails.
  */
 export async function polarsToCube(
-  df: any,
+  df: PolarsDataFrame,
   options: PolarsToCubeOptions = {},
 ): Promise<Observations> {
   const table = await polarsToArrow(df, options.arrowMethod ?? "auto");
@@ -108,7 +131,7 @@ export async function polarsToCube(
 
 /** Convenience: Polars DataFrame → JSON-stat [`Dataset`]. */
 export async function polarsToDataset(
-  df: any,
+  df: PolarsDataFrame,
   options?: PolarsToCubeOptions,
 ): Promise<JsonStatDataset> {
   const { toDataset } = await import("../core/cubeBuilder");
@@ -119,9 +142,9 @@ export async function polarsToDataset(
  * Lazily load `nodejs-polars`. Exposed so callers can `readCSV`/`readParquet`
  * via Polars without a direct import in their own code.
  */
-export async function loadPolars(): Promise<any> {
+export async function loadPolars(): Promise<PolarsModule> {
   try {
-    return await import("nodejs-polars");
+    return (await import("nodejs-polars")) as unknown as PolarsModule;
   } catch {
     throw new PolarsSourceError(
       "nodejs-polars is not installed. Install it with `npm i nodejs-polars` (Node only).",
@@ -153,7 +176,7 @@ export interface CubeToPolarsOptions {
 export async function arrowToPolars(
   table: Table,
   method: CubeToPolarsOptions["method"] = "auto",
-): Promise<any> {
+): Promise<PolarsDataFrame> {
   const pl = await loadPolars();
   const tried: string[] = [];
 
@@ -161,7 +184,7 @@ export async function arrowToPolars(
     tried.push("pl.fromArrow");
     if (typeof pl.fromArrow === "function") {
       try {
-        return pl.fromArrow(table);
+        return await pl.fromArrow(table);
       } catch {
         // fall through to ipc
       }
@@ -175,7 +198,7 @@ export async function arrowToPolars(
     const buf = tableToIPC(table, "stream");
     if (typeof pl.readIPC === "function") {
       try {
-        return pl.readIPC(buf);
+        return await pl.readIPC(buf);
       } catch {
         // fall through
       }
@@ -183,8 +206,7 @@ export async function arrowToPolars(
   }
 
   throw new PolarsSourceError(
-    `Could not build a Polars DataFrame from the Arrow Table (tried: ${tried.join(", ")}). ` +
-      "Ensure nodejs-polars is installed and supports fromArrow()/readIPC().",
+    `Could not build a Polars DataFrame from the Arrow Table (tried: ${tried.join(", ")}). Ensure nodejs-polars is installed and supports fromArrow()/readIPC().`,
   );
 }
 
@@ -212,7 +234,7 @@ export async function arrowToPolars(
 export async function cubeToPolars(
   obs: Observations,
   options: CubeToPolarsOptions = {},
-): Promise<any> {
+): Promise<PolarsDataFrame> {
   const table = cubeToArrow(obs);
   return arrowToPolars(table, options.method);
 }

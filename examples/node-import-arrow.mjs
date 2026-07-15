@@ -14,10 +14,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { tableFromIPC } from "apache-arrow";
-import {
-  arrowToDataset,
-  serialize,
-} from "jsonstat-io";
+import { arrowToDataset, serialize } from "jsonstat-io";
 
 const inputPath = process.argv[2];
 const outputPath = process.argv[3];
@@ -42,9 +39,9 @@ async function main() {
   //    column) and treats dictionary/other columns as dimensions.
   const dataset = arrowToDataset(table, {
     // Explicit hints (optional — overrides detection):
-    measure: undefined,        // auto-detect
-    roles: undefined,          // auto-infer from column names
-    valueForm: "auto",         // auto dense/sparse by null ratio
+    measure: undefined, // auto-detect
+    roles: undefined, // auto-infer from column names
+    valueForm: "auto", // auto dense/sparse by null ratio
   });
 
   // 4. Serialize to canonical JSON.
@@ -63,9 +60,11 @@ async function main() {
   }
 
   // Print a summary of the resulting cube.
-  console.log(`\n--- Cube summary ---`);
+  console.log("\n--- Cube summary ---");
   console.log(`Dimensions: ${dataset.id.join(", ")}`);
-  console.log(`Size: ${dataset.size.join(" × ")} = ${dataset.size.reduce((a, b) => a * b, 1)} cells`);
+  console.log(
+    `Size: ${dataset.size.join(" × ")} = ${dataset.size.reduce((a, b) => a * b, 1)} cells`,
+  );
   console.log(`Roles: ${JSON.stringify(dataset.role)}`);
   console.log(`Value form: ${Array.isArray(dataset.value) ? "dense (array)" : "sparse (object)"}`);
 }

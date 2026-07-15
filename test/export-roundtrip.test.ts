@@ -13,24 +13,23 @@
  *  - Parquet (via `cubeToParquet` → `parquetToDataset`) [requires parquet-wasm]
  */
 
-import { describe, it, expect } from "vitest";
-import { exportDataset } from "../src/index";
+import type { Table } from "apache-arrow";
+import { describe, expect, it } from "vitest";
 import { arrowToDataset } from "../src/arrow/arrowToCube";
+import { exportDataset } from "../src/index";
+import type { JsonStatDataset } from "../src/model/jsonstat";
 import { csvToDataset } from "../src/sources/csv";
 import { csvwToDataset } from "../src/sources/csvw";
+import type { CsvwMetadata } from "../src/sources/csvw";
 import { parquetToDataset } from "../src/sources/parquet";
-import { simpleDataset, orderDataset } from "./fixtures";
-import type { JsonStatDataset } from "../src/model/jsonstat";
+import { orderDataset, simpleDataset } from "./fixtures";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /** Materialize a dense or sparse value array into a flat (number|null)[]. */
-function materializeValues(
-  value: JsonStatDataset["value"],
-  total: number,
-): (number | null)[] {
+function materializeValues(value: JsonStatDataset["value"], total: number): (number | null)[] {
   if (Array.isArray(value)) return value;
   const dense = new Array(total).fill(null);
   for (const [k, v] of Object.entries(value)) {
@@ -44,10 +43,7 @@ function materializeValues(
  * require identical `value` shapes (dense vs sparse) since the import heuristic
  * may choose differently from the original — only the cell contents must match.
  */
-function expectValuesEqual(
-  original: JsonStatDataset,
-  reimported: JsonStatDataset,
-): void {
+function expectValuesEqual(original: JsonStatDataset, reimported: JsonStatDataset): void {
   expect(reimported.id).toEqual(original.id);
   expect(reimported.size).toEqual(original.size);
 
@@ -74,13 +70,13 @@ function expectValuesEqual(
 
 describe("Export round-trip: Arrow", () => {
   it("reproduces values via exportDataset({to:'arrow'}) → arrowToDataset", async () => {
-    const table = (await exportDataset(simpleDataset(), { to: "arrow" })) as any;
+    const table = (await exportDataset(simpleDataset(), { to: "arrow" })) as Table;
     const result = await arrowToDataset(table);
     expectValuesEqual(simpleDataset(), result);
   });
 
   it("round-trips a 1-dimension dataset through Arrow", async () => {
-    const table = (await exportDataset(orderDataset(), { to: "arrow" })) as any;
+    const table = (await exportDataset(orderDataset(), { to: "arrow" })) as Table;
     const result = await arrowToDataset(table);
     expectValuesEqual(orderDataset(), result);
   });
@@ -114,7 +110,7 @@ describe("Export round-trip: CSVW", () => {
     const out = (await exportDataset(simpleDataset(), {
       to: "csvw",
     })) as { csv: string; metadata: unknown };
-    const result = await csvwToDataset(out.csv, out.metadata as any);
+    const result = await csvwToDataset(out.csv, out.metadata as CsvwMetadata);
     expectValuesEqual(simpleDataset(), result);
   });
 
@@ -122,7 +118,7 @@ describe("Export round-trip: CSVW", () => {
     const out = (await exportDataset(orderDataset(), {
       to: "csvw",
     })) as { csv: string; metadata: unknown };
-    const result = await csvwToDataset(out.csv, out.metadata as any);
+    const result = await csvwToDataset(out.csv, out.metadata as CsvwMetadata);
     expectValuesEqual(orderDataset(), result);
   });
 });
@@ -152,9 +148,7 @@ describe("Export round-trip: Parquet", () => {
   // parquet-wasm@0.6 build are exercised; unavailable ones are skipped.
   for (const codec of ["uncompressed", "snappy", "gzip", "zstd"]) {
     it(`round-trips with compression=${codec}`, async () => {
-      const { cubeToParquet, ParquetSourceError } = await import(
-        "../src/sources/parquet"
-      );
+      const { cubeToParquet, ParquetSourceError } = await import("../src/sources/parquet");
       let bytes: Uint8Array;
       try {
         bytes = await cubeToParquet(await obsFromSimple(), {
@@ -182,14 +176,12 @@ describe("Export round-trip: Parquet", () => {
   });
 
   it("rejects an unknown codec with a clear error", async () => {
-    const { cubeToParquet, ParquetSourceError } = await import(
-      "../src/sources/parquet"
+    const { cubeToParquet, ParquetSourceError } = await import("../src/sources/parquet");
+    await expect(cubeToParquet(await obsFromSimple(), { compression: "lzma" })).rejects.toThrow(
+      ParquetSourceError,
     );
-    await expect(
-      cubeToParquet(await obsFromSimple(), { compression: "lzma" }),
-    ).rejects.toThrow(ParquetSourceError);
-    await expect(
-      cubeToParquet(await obsFromSimple(), { compression: "lzma" }),
-    ).rejects.toThrow(/Unknown compression codec "lzma"/);
+    await expect(cubeToParquet(await obsFromSimple(), { compression: "lzma" })).rejects.toThrow(
+      /Unknown compression codec "lzma"/,
+    );
   });
 });

@@ -26,7 +26,7 @@ const STUB_ERROR = new Error(
     "Use the ESM build (e.g. via esm.sh) with the peer installed.",
 );
 
-const proxy: any = new Proxy(
+const proxy: unknown = new Proxy(
   function _jsonstatIoPeerStub() {
     throw STUB_ERROR;
   },

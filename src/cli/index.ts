@@ -21,30 +21,22 @@
  * @module
  */
 
-import { Command } from "commander";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { tableToIPC } from "apache-arrow";
 import type { Table } from "apache-arrow";
-import { fileURLToPath } from "node:url";
-import { realpathSync } from "node:fs";
-import {
-  importToDataset,
-  exportDataset,
-  serialize,
-  ImporterError,
-} from "../index";
+import { Command } from "commander";
+import { ImporterError, exportDataset, importToDataset, serialize } from "../index";
 import type { ExportTarget } from "../index";
 import type { JsonStatDataset } from "../model/jsonstat";
 import { parseCliOptions } from "./args";
-import type { RawCliOptions } from "./args";
+import type { ParsedCliOptions, RawCliOptions } from "./args";
 
 // ---------------------------------------------------------------------------
 // File writing (Node only) — kept inline to avoid pulling node:fs in browser
 // builds of the library proper.
 // ---------------------------------------------------------------------------
-async function writeOutput(
-  text: string,
-  output: string | undefined,
-): Promise<void> {
+async function writeOutput(text: string, output: string | undefined): Promise<void> {
   if (!output || output === "-") {
     // stdout
     const { stdout } = await import("node:process");
@@ -61,10 +53,7 @@ async function writeOutput(
  * stdout we write the raw bytes (no trailing newline), since the content is
  * not text.
  */
-async function writeBinaryOutput(
-  bytes: Uint8Array,
-  output: string | undefined,
-): Promise<void> {
+async function writeBinaryOutput(bytes: Uint8Array, output: string | undefined): Promise<void> {
   if (!output || output === "-") {
     const { stdout } = await import("node:process");
     // process.stdout.write accepts a Buffer (raw bytes, no text encoding).
@@ -84,28 +73,32 @@ async function validateDataset(dataset: JsonStatDataset): Promise<string[]> {
     // installed. Using a non-literal specifier so TypeScript skips static
     // module resolution; the try/catch handles runtime absence.
     const spec = "jsonstat-validator";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod: any = await import(/* @vite-ignore */ spec);
-    const validator =
-      mod?.validate ??
-      mod?.default?.validate ??
-      mod?.default?.default?.validate;
+    // jsonstat-validator is an optional peer without types imported here; model
+    // only the validate() surface and its result shape we consume.
+    interface ValidatorResult {
+      valid: boolean;
+      errors: string[];
+    }
+    type ValidatorModule = {
+      validate?: (ds: JsonStatDataset) => ValidatorResult;
+      default?: { validate?: (ds: JsonStatDataset) => ValidatorResult; default?: unknown };
+    };
+    const mod = (await import(/* @vite-ignore */ spec)) as ValidatorModule;
+    const validator = mod?.validate ?? mod?.default?.validate;
     if (typeof validator !== "function") {
       return ["jsonstat-validator is installed but has no validate() export."];
     }
     const result = validator(dataset);
     return result.valid ? [] : result.errors;
   } catch {
-    return [
-      "jsonstat-validator is not installed. Install it with: npm i -D jsonstat-validator",
-    ];
+    return ["jsonstat-validator is not installed. Install it with: npm i -D jsonstat-validator"];
   }
 }
 
 // ---------------------------------------------------------------------------
 // Program definition
 // ---------------------------------------------------------------------------
-const VERSION = "0.1.1";
+const VERSION = "0.3.1";
 
 function createProgram(): Command {
   const program = new Command();
@@ -134,17 +127,14 @@ function createProgram(): Command {
     .option("--dimensions <a,b,c>", "Comma-separated dimension column names, in order")
     .option(
       "--role <assigns>",
-      'Role assignments: time=<col>,geo=<col>,metric=<col> (comma-separated)',
+      "Role assignments: time=<col>,geo=<col>,metric=<col> (comma-separated)",
     )
     .option("--status <column>", "Name of the status column")
     .option("--sparse", "Force sparse (object) value form")
     .option("--dense", "Force dense (array) value form")
     .option("--auto", "Auto-detect value form (default)")
     .option("--threshold <n>", "Sparse threshold: null ratio 0–1 (default 0.5)")
-    .option(
-      "--status-form <form>",
-      "Status emission: auto (default), array, string, object, none",
-    )
+    .option("--status-form <form>", "Status emission: auto (default), array, string, object, none")
     .option("--label <text>", "Dataset label")
     .option("--source <text>", "Dataset source")
     .option("--updated <date>", "Dataset last-updated date (ISO 8601)")
@@ -160,6 +150,12 @@ function createProgram(): Command {
       "Inline Data Package descriptor as a JSON string (source = CSV body)",
     )
     .option("--delimiter <char>", 'CSV delimiter (default: ",")')
+    .option("--decimal <char>", 'CSV-stat (JSV) decimal delimiter (default: ".")')
+    .option("--unit-sep <char>", 'CSV-stat (JSV) unit-column separator (default: "|")')
+    .option(
+      "--line-terminator <eol>",
+      'Line terminator for CSV/CSVW/CSV-stat/Data Package export: "\\r\\n" (default) or "\\n"',
+    )
     .action(async (input: string, opts: RawCliOptions) => {
       await run(input, opts);
     });
@@ -197,11 +193,8 @@ export interface CliRunResult {
  * serialize JSON-stat; `arrow|parquet|csv|csvw` = import a JSON-stat source
  * and export it to the requested columnar format.
  */
-export async function run(
-  input: string,
-  rawOpts: RawCliOptions,
-): Promise<CliRunResult> {
-  let parsed;
+export async function run(input: string, rawOpts: RawCliOptions): Promise<CliRunResult> {
+  let parsed: ParsedCliOptions;
   try {
     parsed = parseCliOptions(rawOpts);
   } catch (e) {
@@ -290,7 +283,7 @@ async function runExport(
 
   const to = parsed.to as ExportTarget;
   try {
-    const result = await exportDataset(dataset, { to });
+    const result = await exportDataset(dataset, { ...parsed.exportOptions, to });
 
     if (to === "csv" || to === "jsv") {
       const text = result as string;
@@ -306,10 +299,7 @@ async function runExport(
       await writeOutput(csv, parsed.output);
       if (parsed.output && parsed.output !== "-") {
         const metaPath = csvwMetadataSibling(parsed.output);
-        await writeOutput(
-          JSON.stringify(metadata, null, 2),
-          metaPath,
-        );
+        await writeOutput(JSON.stringify(metadata, null, 2), metaPath);
       } else {
         // stdout: emit a separator and the metadata for visibility.
         const { stdout } = await import("node:process");
@@ -328,10 +318,7 @@ async function runExport(
       await writeOutput(csv, parsed.output);
       if (parsed.output && parsed.output !== "-") {
         const metaPath = datapackageSibling(parsed.output);
-        await writeOutput(
-          JSON.stringify(metadata, null, 2),
-          metaPath,
-        );
+        await writeOutput(JSON.stringify(metadata, null, 2), metaPath);
       } else {
         const { stdout } = await import("node:process");
         stdout.write("\n--- datapackage.json ---\n");
@@ -398,10 +385,12 @@ const isMain = (() => {
 })();
 
 if (isMain) {
-  createProgram().parseAsync(process.argv).catch((e: unknown) => {
-    console.error(e);
-    process.exitCode = 1;
-  });
+  createProgram()
+    .parseAsync(process.argv)
+    .catch((e: unknown) => {
+      console.error(e);
+      process.exitCode = 1;
+    });
 }
 
 export { createProgram };

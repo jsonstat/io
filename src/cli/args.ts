@@ -8,8 +8,8 @@
  */
 
 import type { BuildOptions } from "../core/cubeBuilder";
+import type { ExportOptions, ImportOptions } from "../index";
 import type { DatasetMeta } from "../model/ir";
-import type { ImportOptions } from "../index";
 import type { SourceFormat } from "../util/detect";
 
 /** The raw option bag that commander collects from argv. */
@@ -37,6 +37,12 @@ export interface RawCliOptions {
   csvwMetadata?: string;
   datapackageMetadata?: string;
   delimiter?: string;
+  /** CSV-stat (JSV) / export decimal delimiter (`--decimal`). */
+  decimal?: string;
+  /** CSV-stat (JSV) / export unit separator (`--unit-sep`). */
+  unitSep?: string;
+  /** Line terminator for CSV/CSVW/CSV-stat/Data Package export (`--line-terminator`). */
+  lineTerminator?: string;
 }
 
 /** Parsed CLI options, ready to feed into `importToDataset` + `serialize`. */
@@ -45,6 +51,8 @@ export interface ParsedCliOptions {
   to: string;
   importOptions: ImportOptions;
   buildOptions: BuildOptions;
+  /** Export options for the `--to arrow|parquet|csv|csvw|jsv|datapackage` path. */
+  exportOptions: ExportOptions;
   /** `--validate` flag. */
   validate: boolean;
   /** Output file path (`-o` / `--output`), or undefined for stdout. */
@@ -89,11 +97,13 @@ const ALLOWED_STATUS_FORM: ReadonlySet<string> = new Set([
  * Parse the `--role` flag: `time=year,geo=country,metric=value` → a
  * [`RoleMap`](../model/ir.ts).
  */
-export function parseRoleFlag(raw: string | undefined): {
-  time?: string[];
-  geo?: string[];
-  metric?: string[];
-} | undefined {
+export function parseRoleFlag(raw: string | undefined):
+  | {
+      time?: string[];
+      geo?: string[];
+      metric?: string[];
+    }
+  | undefined {
   if (!raw) return undefined;
   const roles: { time?: string[]; geo?: string[]; metric?: string[] } = {};
   for (const pair of raw.split(",")) {
@@ -106,16 +116,14 @@ export function parseRoleFlag(raw: string | undefined): {
     const role = pair.slice(0, eq).trim();
     const col = pair.slice(eq + 1).trim();
     if (role !== "time" && role !== "geo" && role !== "metric") {
-      throw new Error(
-        `Invalid --role "${role}". Must be one of: time, geo, metric.`,
-      );
+      throw new Error(`Invalid --role "${role}". Must be one of: time, geo, metric.`);
     }
     if (!col) {
       throw new Error(`--role "${role}=" is missing a column name.`);
     }
     // A role can map to multiple columns (comma-separated within the value
     // is already split above, so each pair is a single column). Accumulate.
-    (roles[role] ??= []).push(col);
+    roles[role] = [...(roles[role] ?? []), col];
   }
   return roles;
 }
@@ -123,9 +131,7 @@ export function parseRoleFlag(raw: string | undefined): {
 /**
  * Parse the `--dimensions` flag: `a,b,c` → `["a","b","c"]`.
  */
-export function parseDimensionsFlag(
-  raw: string | undefined,
-): string[] | undefined {
+export function parseDimensionsFlag(raw: string | undefined): string[] | undefined {
   if (!raw) return undefined;
   const dims = raw
     .split(",")
@@ -160,6 +166,84 @@ export function resolveValueForm(raw: RawCliOptions): "auto" | "dense" | "sparse
 }
 
 /**
+ * Slugify a string into a URL-safe Data Package `name` slug. Mirrors the
+ * `slugify` rule in [`sources/datapackage`](../sources/datapackage.ts) so the
+ * CLI and the writer default agree.
+ */
+function slugifyName(stem: string): string {
+  return (
+    stem
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "dataset"
+  );
+}
+
+/**
+ * Derive a Data Package resource `path` (the CSV filename) and `name` slug
+ * from the `-o` / `--output` flag.
+ *
+ * `path` is the basename only (e.g. `data/sub/cube.csv` → `"cube.csv"`):
+ * the descriptor is written as a sibling of the CSV, so the resource `path`
+ * is relative to that same directory. The stem (extension stripped) feeds
+ * `name` through [`slugifyName`].
+ *
+ * Returns `undefined` for both when `output` is absent or `"-"` (stdout), so
+ * the writer's own defaults (`slugify(meta.label)` / `"data.csv"`) apply.
+ */
+export function deriveDataPackageNamePath(output: string | undefined): {
+  datapackageName?: string;
+  datapackagePath?: string;
+} {
+  if (!output || output === "-") return {};
+  // basename across both POSIX and Windows separators
+  const slash = Math.max(output.lastIndexOf("/"), output.lastIndexOf("\\"));
+  const basename = slash >= 0 ? output.slice(slash + 1) : output;
+  if (basename === "") return {};
+  const dot = basename.lastIndexOf(".");
+  const stem = dot > 0 ? basename.slice(0, dot) : basename;
+  return { datapackageName: slugifyName(stem), datapackagePath: basename };
+}
+
+/**
+ * Build the [`ExportOptions`](../index.ts) for the `--to` (export) path from
+ * the raw CLI flags.
+ *
+ * The `to` field is intentionally NOT set here — the caller (`runExport`)
+ * owns it. This forwards the format-specific knobs (`delimiter`,
+ * `lineTerminator`, `decimal`, `unitSep`) that the previous implementation
+ * dropped, and derives the Data Package `name`/`path` from `-o`.
+ */
+/**
+ * Normalize a `--line-terminator` flag value into a real line terminator.
+ * Accepts the literals `\n` / `\r\n` (as typed on the shell, i.e. backslash-n),
+ * the words `lf` / `crlf`, and `\r`. Anything else is passed through verbatim.
+ */
+function normalizeLineTerminator(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const v = value.trim().toLowerCase();
+  if (v === "\\n" || v === "lf") return "\n";
+  if (v === "\\r\\n" || v === "crlf") return "\r\n";
+  if (v === "\\r" || v === "cr") return "\r";
+  return value;
+}
+
+export function buildExportOptions(raw: RawCliOptions): ExportOptions {
+  const { datapackageName, datapackagePath } = deriveDataPackageNamePath(raw.output);
+  return {
+    to: "csv", // placeholder; the caller overrides via spread.
+    delimiter: raw.delimiter,
+    decimal: raw.decimal,
+    unitSep: raw.unitSep,
+    lineTerminator: normalizeLineTerminator(raw.lineTerminator),
+    ...(datapackageName ? { datapackageName } : {}),
+    ...(datapackagePath ? { datapackagePath } : {}),
+  };
+}
+
+/**
  * Convert the raw commander option bag into typed library options.
  *
  * @throws Error with a user-friendly message if any flag is invalid.
@@ -175,9 +259,7 @@ export function parseCliOptions(raw: RawCliOptions): ParsedCliOptions {
   // --- --to (drives direction: jsonstat = import, else export) ----------
   const to = raw.to ?? "jsonstat";
   if (!ALLOWED_TO.has(to)) {
-    throw new Error(
-      `--to "${to}" is not supported. Use one of: ${[...ALLOWED_TO].join(", ")}.`,
-    );
+    throw new Error(`--to "${to}" is not supported. Use one of: ${[...ALLOWED_TO].join(", ")}.`);
   }
 
   // --- --status-form ----------------------------------------------------
@@ -210,9 +292,7 @@ export function parseCliOptions(raw: RawCliOptions): ParsedCliOptions {
     roles: parseRoleFlag(raw.role),
     build: buildOptions,
     delimiter: raw.delimiter,
-    csvwMetadata: raw.csvwMetadata
-      ? safeJsonParse(raw.csvwMetadata, "--csvw-metadata")
-      : undefined,
+    csvwMetadata: raw.csvwMetadata ? safeJsonParse(raw.csvwMetadata, "--csvw-metadata") : undefined,
     datapackageMetadata: raw.datapackageMetadata
       ? safeJsonParse(raw.datapackageMetadata, "--datapackage-metadata")
       : undefined,
@@ -222,6 +302,7 @@ export function parseCliOptions(raw: RawCliOptions): ParsedCliOptions {
     to,
     importOptions,
     buildOptions,
+    exportOptions: buildExportOptions(raw),
     validate: raw.validate === true,
     output: raw.output,
     pretty: raw.noPretty ? false : (raw.pretty ?? true),
@@ -233,8 +314,6 @@ function safeJsonParse(text: string, flagName: string): unknown {
   try {
     return JSON.parse(text);
   } catch (e) {
-    throw new Error(
-      `${flagName} must be valid JSON: ${(e as Error).message}`,
-    );
+    throw new Error(`${flagName} must be valid JSON: ${(e as Error).message}`);
   }
 }

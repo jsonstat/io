@@ -203,10 +203,7 @@ export interface JsonStatError {
 }
 
 /** Any top-level JSON-stat 2.0 response. */
-export type JsonStatResponse =
-  | JsonStatDataset
-  | JsonStatDimensionResponse
-  | JsonStatCollection;
+export type JsonStatResponse = JsonStatDataset | JsonStatDimensionResponse | JsonStatCollection;
 
 /** Discriminated union guard helper: is this a dataset response? */
 export function isDataset(r: JsonStatResponse): r is JsonStatDataset {

@@ -34,17 +34,8 @@
  * the source used the string, array, or object form.
  */
 
-import type {
-  DimensionColumn,
-  MeasureColumn,
-  Observations,
-  StatusColumn,
-} from "../model/ir";
-import type {
-  JsonStatDataset,
-  JsonStatStatus,
-  JsonStatValue,
-} from "../model/jsonstat";
+import type { DimensionColumn, MeasureColumn, Observations, StatusColumn } from "../model/ir";
+import type { JsonStatDataset, JsonStatStatus, JsonStatValue } from "../model/jsonstat";
 import { multiIndex, totalCells } from "./strides";
 
 // ---------------------------------------------------------------------------
@@ -119,9 +110,7 @@ function materializeValues(dataset: JsonStatDataset): (number | null)[] {
   const value = dataset.value as JsonStatValue;
   if (Array.isArray(value)) {
     if (value.length !== total) {
-      throw new CubeReaderError(
-        `value array length ${value.length} ≠ product(size) ${total}`,
-      );
+      throw new CubeReaderError(`value array length ${value.length} ≠ product(size) ${total}`);
     }
     return value.slice();
   }
@@ -145,19 +134,14 @@ function materializeValues(dataset: JsonStatDataset): (number | null)[] {
  * Normalize any `status` form (string / array / object) into a per-cell array
  * of length `total`. Empty string means "no status for this cell".
  */
-function normalizeStatus(
-  status: JsonStatStatus | undefined,
-  total: number,
-): string[] | undefined {
+function normalizeStatus(status: JsonStatStatus | undefined, total: number): string[] | undefined {
   if (status === undefined) return undefined;
   if (typeof status === "string") {
     return new Array(total).fill(status);
   }
   if (Array.isArray(status)) {
     if (status.length !== total) {
-      throw new CubeReaderError(
-        `status array length ${status.length} ≠ product(size) ${total}`,
-      );
+      throw new CubeReaderError(`status array length ${status.length} ≠ product(size) ${total}`);
     }
     return status.slice();
   }
@@ -193,10 +177,7 @@ export interface ReadOptions {
  *
  * @throws [`CubeReaderError`](#cubereadererror) on structural problems.
  */
-export function readDataset(
-  dataset: JsonStatDataset,
-  options: ReadOptions = {},
-): Observations {
+export function readDataset(dataset: JsonStatDataset, options: ReadOptions = {}): Observations {
   if (dataset.class !== "dataset") {
     throw new CubeReaderError(`Expected class "dataset", got "${dataset.class}"`);
   }
@@ -287,10 +268,7 @@ export function readDataset(
 }
 
 /** Convenience: read a JSON-stat response, rejecting non-dataset classes. */
-export function readResponse(
-  response: unknown,
-  options?: ReadOptions,
-): Observations {
+export function readResponse(response: unknown, options?: ReadOptions): Observations {
   const ds = response as JsonStatDataset;
   if (!ds || ds.version !== "2.0" || ds.class !== "dataset") {
     throw new CubeReaderError(

@@ -89,9 +89,7 @@ export async function loadInput(source: string | Uint8Array | Blob): Promise<Loa
     return { bytes, source };
   }
 
-  throw new Error(
-    `loadInput: cannot resolve "${source}" in a browser without a URL scheme`,
-  );
+  throw new Error(`loadInput: cannot resolve "${source}" in a browser without a URL scheme`);
 }
 
 // ---------------------------------------------------------------------------

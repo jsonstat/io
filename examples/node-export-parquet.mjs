@@ -21,9 +21,7 @@ const outputPath = process.argv[3] ?? "./out.parquet";
 const target = process.argv[4] ?? "parquet"; // "parquet" | "arrow" | "csv" | "csvw"
 
 if (!inputPath) {
-  console.error(
-    "Usage: node node-export-parquet.mjs <input.jsonstat.json> [output] [target]",
-  );
+  console.error("Usage: node node-export-parquet.mjs <input.jsonstat.json> [output] [target]");
   console.error("  target: parquet (default), arrow, csv, csvw");
   process.exit(2);
 }
@@ -61,7 +59,7 @@ async function main() {
     const csv = await exportDataset(dataset, { to: "csv" });
     writeFileSync(outputPath, csv, "utf8");
     console.log(`\nWrote CSV to ${outputPath}`);
-    console.log(`\n--- First 5 lines ---`);
+    console.log("\n--- First 5 lines ---");
     console.log(csv.split("\n").slice(0, 5).join("\n"));
   } else if (target === "csvw") {
     // 2d. JSON-stat → CSV text + CSVW metadata.

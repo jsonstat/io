@@ -33,7 +33,7 @@ if (!Arrow) {
   throw new Error(
     "jsonstat-io (browser bundle): the apache-arrow UMD global was not found. " +
       'Load it first, e.g. <script src="https://cdn.jsdelivr.net/npm/apache-arrow@17"></script>. ' +
-      "See README §\"Browser / CDN\" for the two-tag pattern.",
+      'See README §"Browser / CDN" for the two-tag pattern.',
   );
 }
 

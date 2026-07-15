@@ -168,8 +168,10 @@ The schema's `primaryKey` is set to all dimension fields — together they uniqu
 # JSON-stat → CSV + sibling datapackage.json descriptor
 npx jsonstat-io ./sales.jsonstat.json --to datapackage -o sales.csv
 
-# With -o, writes sales.csv and sales.datapackage.json
-# Without -o, prints CSV + a separator + descriptor JSON to stdout
+# Writes sales.csv and datapackage.json (sibling) — the descriptor's resource
+# name is "sales" and path is "sales.csv" (derived from the -o stem), so it
+# references the CSV that is actually written.
+# Without -o, prints CSV + a separator + descriptor JSON to stdout.
 ```
 
 ## Import CLI

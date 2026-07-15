@@ -207,9 +207,7 @@ export function csvToCube(text: string, options: CsvToCubeOptions = {}): Observa
       return idx;
     });
   } else {
-    dimensionIdxs = headerNames
-      .map((_, i) => i)
-      .filter((i) => i !== measureIdx && i !== statusIdx);
+    dimensionIdxs = headerNames.map((_, i) => i).filter((i) => i !== measureIdx && i !== statusIdx);
     if (dimensionIdxs.length === 0) {
       throw new CsvSourceError("No dimension columns remain after measure/status selection");
     }
@@ -313,11 +311,7 @@ export function cubeColumns(obs: Observations): {
  * Quote a single CSV field per RFC-4180. A field needs quoting if it contains
  * the delimiter, a double quote, a CR, or an LF. Embedded quotes are doubled.
  */
-export function quoteCsvField(
-  value: string,
-  delimiter: string,
-  force = false,
-): string {
+export function quoteCsvField(value: string, delimiter: string, force = false): string {
   const needsQuoting =
     force ||
     value.includes(delimiter) ||
@@ -367,11 +361,7 @@ export function serializeRows(
  * const csv = cubeToCsv(observations);
  * ```
  */
-export function cubeToCsv(
-  obs: Observations,
-  options: CubeToCsvOptions = {},
-): string {
+export function cubeToCsv(obs: Observations, options: CubeToCsvOptions = {}): string {
   const { header, rows } = cubeColumns(obs);
   return serializeRows(header, rows, options);
 }
-

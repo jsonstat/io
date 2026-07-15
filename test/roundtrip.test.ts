@@ -9,9 +9,9 @@
  * sample suite (oecd, canada, galicia, order, hierarchy, us-gsp, us-unr).
  */
 
-import { describe, it, expect } from "vitest";
-import { readDataset } from "../src/core/cubeReader";
+import { describe, expect, it } from "vitest";
 import { buildDataset } from "../src/core/cubeBuilder";
+import { readDataset } from "../src/core/cubeReader";
 import type { JsonStatDataset } from "../src/model/jsonstat";
 
 /**
@@ -31,12 +31,8 @@ function expectDatasetsEqual(a: JsonStatDataset, b: JsonStatDataset): void {
     const idxB = b.dimension[dimId].category?.index;
     if (idxA && idxB) {
       // Normalize both to arrays.
-      const arrA = Array.isArray(idxA)
-        ? idxA
-        : Object.keys(idxA).sort((x, y) => idxA[x] - idxA[y]);
-      const arrB = Array.isArray(idxB)
-        ? idxB
-        : Object.keys(idxB).sort((x, y) => idxB[x] - idxB[y]);
+      const arrA = Array.isArray(idxA) ? idxA : Object.keys(idxA).sort((x, y) => idxA[x] - idxA[y]);
+      const arrB = Array.isArray(idxB) ? idxB : Object.keys(idxB).sort((x, y) => idxB[x] - idxB[y]);
       expect(arrB).toEqual(arrA);
     }
   }
@@ -48,10 +44,7 @@ function expectDatasetsEqual(a: JsonStatDataset, b: JsonStatDataset): void {
   expect(valsB).toEqual(valsA);
 }
 
-function materialize(
-  value: JsonStatDataset["value"],
-  total: number,
-): (number | null)[] {
+function materialize(value: JsonStatDataset["value"], total: number): (number | null)[] {
   if (Array.isArray(value)) return value;
   const dense = new Array(total).fill(null);
   for (const [k, v] of Object.entries(value)) {
@@ -128,10 +121,14 @@ describe("Round-trip: dense datasets", () => {
         year: { category: { index: ["2020", "2021"] } },
       },
       value: [
-        10, 11, // M, young, 2020/2021
-        20, 21, // M, old,   2020/2021
-        30, 31, // F, young, 2020/2021
-        40, 41, // F, old,   2020/2021
+        10,
+        11, // M, young, 2020/2021
+        20,
+        21, // M, old,   2020/2021
+        30,
+        31, // F, young, 2020/2021
+        40,
+        41, // F, old,   2020/2021
       ],
     };
     expectDatasetsEqual(ds, roundTrip(ds));

@@ -5,14 +5,15 @@
  * commander Program or touch the filesystem, making them fast and deterministic.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  parseRoleFlag,
+  buildExportOptions,
+  deriveDataPackageNamePath,
+  parseCliOptions,
   parseDimensionsFlag,
+  parseRoleFlag,
   parseThreshold,
   resolveValueForm,
-  parseCliOptions,
-  type RawCliOptions,
 } from "../src/cli/args";
 
 // ---------------------------------------------------------------------------
@@ -25,9 +26,7 @@ describe("parseRoleFlag", () => {
   });
 
   it("parses multiple role assignments", () => {
-    expect(
-      parseRoleFlag("time=year,geo=country,metric=value"),
-    ).toEqual({
+    expect(parseRoleFlag("time=year,geo=country,metric=value")).toEqual({
       time: ["year"],
       geo: ["country"],
       metric: ["value"],
@@ -247,13 +246,108 @@ describe("parseCliOptions", () => {
   });
 
   it("throws on invalid --csvw-metadata JSON", () => {
-    expect(() =>
-      parseCliOptions({ csvwMetadata: "{not json" }),
-    ).toThrow(/valid JSON/);
+    expect(() => parseCliOptions({ csvwMetadata: "{not json" })).toThrow(/valid JSON/);
   });
 
   it("does not create empty meta object when no metadata flags given", () => {
     const result = parseCliOptions({});
     expect(result.buildOptions.meta).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveDataPackageNamePath / buildExportOptions
+// ---------------------------------------------------------------------------
+
+describe("deriveDataPackageNamePath", () => {
+  it("derives name and path from a simple CSV output", () => {
+    expect(deriveDataPackageNamePath("cube.csv")).toEqual({
+      datapackageName: "cube",
+      datapackagePath: "cube.csv",
+    });
+  });
+
+  it("uses only the basename for path (descriptor is a CSV sibling)", () => {
+    expect(deriveDataPackageNamePath("data/sub/cube.csv")).toEqual({
+      datapackageName: "cube",
+      datapackagePath: "cube.csv",
+    });
+  });
+
+  it("handles Windows-style separators", () => {
+    expect(deriveDataPackageNamePath("data\\sub\\cube.csv")).toEqual({
+      datapackageName: "cube",
+      datapackagePath: "cube.csv",
+    });
+  });
+
+  it("slugifies a non-slug stem", () => {
+    expect(deriveDataPackageNamePath("My Cube.csv")).toEqual({
+      datapackageName: "my-cube",
+      datapackagePath: "My Cube.csv",
+    });
+  });
+
+  it("returns empty object when output is absent", () => {
+    expect(deriveDataPackageNamePath(undefined)).toEqual({});
+  });
+
+  it("returns empty object when output is '-' (stdout)", () => {
+    expect(deriveDataPackageNamePath("-")).toEqual({});
+  });
+
+  it("handles an extensionless output", () => {
+    expect(deriveDataPackageNamePath("cube")).toEqual({
+      datapackageName: "cube",
+      datapackagePath: "cube",
+    });
+  });
+});
+
+describe("buildExportOptions", () => {
+  it("forwards delimiter/decimal/unitSep", () => {
+    const opts = buildExportOptions({
+      delimiter: ";",
+      decimal: ",",
+      unitSep: "#",
+    });
+    expect(opts.delimiter).toBe(";");
+    expect(opts.decimal).toBe(",");
+    expect(opts.unitSep).toBe("#");
+  });
+
+  it("derives datapackage name/path from -o", () => {
+    const opts = buildExportOptions({ output: "cube.csv" });
+    expect(opts.datapackageName).toBe("cube");
+    expect(opts.datapackagePath).toBe("cube.csv");
+  });
+
+  it("leaves datapackage name/path undefined without -o", () => {
+    const opts = buildExportOptions({});
+    expect(opts.datapackageName).toBeUndefined();
+    expect(opts.datapackagePath).toBeUndefined();
+  });
+
+  it("leaves datapackage name/path undefined for stdout (-)", () => {
+    const opts = buildExportOptions({ output: "-" });
+    expect(opts.datapackageName).toBeUndefined();
+    expect(opts.datapackagePath).toBeUndefined();
+  });
+
+  it("normalizes --line-terminator escape sequences", () => {
+    expect(buildExportOptions({ lineTerminator: "\\n" }).lineTerminator).toBe("\n");
+    expect(buildExportOptions({ lineTerminator: "\\r\\n" }).lineTerminator).toBe("\r\n");
+    expect(buildExportOptions({ lineTerminator: "lf" }).lineTerminator).toBe("\n");
+    expect(buildExportOptions({ lineTerminator: "crlf" }).lineTerminator).toBe("\r\n");
+  });
+
+  it("passes an unknown line terminator through verbatim", () => {
+    expect(buildExportOptions({ lineTerminator: "XX" }).lineTerminator).toBe("XX");
+  });
+
+  it("is reachable through parseCliOptions", () => {
+    const result = parseCliOptions({ to: "datapackage", output: "cube.csv" });
+    expect(result.exportOptions.datapackageName).toBe("cube");
+    expect(result.exportOptions.datapackagePath).toBe("cube.csv");
   });
 });
