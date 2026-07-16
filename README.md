@@ -1,6 +1,6 @@
 # jsonstat-io
 
-> Convert between [JSON-stat 2.0](https://jsonstat.org/) cubes and the columnar stack — Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, CSV-stat, and Frictionless Data Package. An Arrow-bridged, bidirectional interop layer for the lakehouse ecosystem.
+> Convert between [JSON-stat 2.0](https://jsonstat.org/) datasets and the columnar stack — Apache Arrow, Parquet, DuckDB, Polars. An Arrow-bridged, bidirectional interop layer for the lakehouse ecosystem. Or between JSON-stat 2.0](https://jsonstat.org/) datasets and several CSV-based formats (plain CSV, CSV-stat, Frictionless Data Package, CSVW).
 
 `jsonstat-io` bridges the **columnar stack** — Arrow, Parquet, DuckDB, Polars — and the **JSON-stat statistical format** in a single, dependency-light package. Because Parquet, DuckDB, and Polars all emit Apache Arrow tables natively, one conversion path serves them all in **both directions**:
 
