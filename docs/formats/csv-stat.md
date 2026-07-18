@@ -28,7 +28,7 @@ data
 - **`data` marker** (required): a lone `data` line separating header from CSV body.
 - **CSV body**: a header of `{dimId}…[,status],value` (the value column is always last and always named `value`; an optional `status` column sits immediately before it), then one row per observation. Missing values are written as empty value cells (non-numeric cells on import become `null`).
 
-See the [authoritative format spec](https://jsonstat.org/format/#csv-stat) for the full grammar and a worked example.
+See the [authoritative format spec](https://github.com/jsonstat/csv) for the full grammar and a worked example.
 
 ## Import path
 
