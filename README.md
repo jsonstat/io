@@ -154,7 +154,7 @@ src/
 │   ├── arrowToCube.ts  # Arrow Table → Observations IR (import)
 │   └── arrowFromCube.ts# Observations IR → Arrow Table (export)
 ├── sources/        # Per-format adapters (optional peers, lazy, bidirectional)
-│   ├── parquet.ts  duckdb.ts  polars.ts  csvw.ts  csv.ts  csvstat.ts  datapackage.ts
+│   └── parquet.ts  duckdb.ts  polars.ts  csvw.ts  csv.ts  csvstat.ts  datapackage.ts
 ├── browser/        # IIFE-bundle shims: arrow-global.ts (UMD global), peer-stub.ts
 ├── sink/           # serialize.ts — JSON-stat → canonical JSON string/bytes
 ├── util/           # detect.ts (format sniffing), fetch.ts (loading), density.ts
