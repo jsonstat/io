@@ -74,7 +74,7 @@ Output:
       --no-pretty          Compact JSON output (single line).
       --canonical-keys     Reorder top-level keys canonically (default: true).
       --no-canonical-keys  Preserve insertion key order.
-      --validate           Validate output with jsonstat-validator (if installed).
+      --validate           Validate output with @jsonstat-validator/ts (if installed).
 
 CSV/CSVW/Data Package:
       --csvw-metadata <json>       Inline CSVW metadata as a JSON string.
@@ -182,11 +182,11 @@ label and `"data.csv"`.
 ### Validate the output
 
 ```sh
-npm i -g jsonstat-validator
+npm i -g @jsonstat-validator/ts
 npx jsonstat-io ./sales.parquet --validate
 ```
 
-If `jsonstat-validator` is not installed, `--validate` prints a hint instead of failing.
+If `@jsonstat-validator/ts` is not installed, `--validate` prints a hint instead of failing.
 
 ## How detection works
 

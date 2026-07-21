@@ -65,15 +65,15 @@ async function writeBinaryOutput(bytes: Uint8Array, output: string | undefined):
 }
 
 // ---------------------------------------------------------------------------
-// Optional validation via jsonstat-validator (lazy, peer).
+// Optional validation via @jsonstat-validator/ts (lazy, peer).
 // ---------------------------------------------------------------------------
 async function validateDataset(dataset: JsonStatDataset): Promise<string[]> {
   try {
-    // jsonstat-validator is an optional peer dependency that may not be
+    // @jsonstat-validator/ts is an optional peer dependency that may not be
     // installed. Using a non-literal specifier so TypeScript skips static
     // module resolution; the try/catch handles runtime absence.
-    const spec = "jsonstat-validator";
-    // jsonstat-validator is an optional peer without types imported here; model
+    const spec = "@jsonstat-validator/ts";
+    // The validator is an optional peer without types imported here; model
     // only the validate() surface and its result shape we consume.
     interface ValidatorResult {
       valid: boolean;
@@ -86,19 +86,21 @@ async function validateDataset(dataset: JsonStatDataset): Promise<string[]> {
     const mod = (await import(/* @vite-ignore */ spec)) as ValidatorModule;
     const validator = mod?.validate ?? mod?.default?.validate;
     if (typeof validator !== "function") {
-      return ["jsonstat-validator is installed but has no validate() export."];
+      return ["@jsonstat-validator/ts is installed but has no validate() export."];
     }
     const result = validator(dataset);
     return result.valid ? [] : result.errors;
   } catch {
-    return ["jsonstat-validator is not installed. Install it with: npm i -D jsonstat-validator"];
+    return [
+      "@jsonstat-validator/ts is not installed. Install it with: npm i -D @jsonstat-validator/ts",
+    ];
   }
 }
 
 // ---------------------------------------------------------------------------
 // Program definition
 // ---------------------------------------------------------------------------
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 
 function createProgram(): Command {
   const program = new Command();
@@ -138,7 +140,7 @@ function createProgram(): Command {
     .option("--label <text>", "Dataset label")
     .option("--source <text>", "Dataset source")
     .option("--updated <date>", "Dataset last-updated date (ISO 8601)")
-    .option("--validate", "Validate output with jsonstat-validator (if installed)")
+    .option("--validate", "Validate output with @jsonstat-validator/ts (if installed)")
     .option("-o, --output <file>", "Output file path (default: stdout)")
     .option("--pretty", "Pretty-print JSON (default: true)")
     .option("--no-pretty", "Compact JSON output")

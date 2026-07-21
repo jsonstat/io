@@ -22,12 +22,14 @@ npm install jsonstat-io
 The only hard runtime dependencies are [`apache-arrow`](https://arrow.apache.org/docs/js/) and [`commander`](https://github.com/tj/commander.js) (CLI only). Format-specific engines are **optional peers** — install only what you use:
 
 ```sh
-npm install parquet-wasm         # Parquet (browser + Node)
-npm install duckdb-async         # DuckDB (Node)
-npm install @duckdb/duckdb-wasm  # DuckDB (browser)
-npm install nodejs-polars        # Polars (Node only)
-npm install jsonstat-validator   # optional output validation
+npm install parquet-wasm            # Parquet (browser + Node)
+npm install duckdb-async            # DuckDB (Node)
+npm install @duckdb/duckdb-wasm     # DuckDB (browser)
+npm install nodejs-polars           # Polars (Node only)
+npm install @jsonstat-validator/ts  # optional output validation
 ```
+
+These are declared as **optional peer dependencies**: a plain `npm install jsonstat-io` (or `npx jsonstat-io`) pulls in *only* `apache-arrow` + `commander` — no native build tooling, no deprecation warnings. Add the peer for each format you actually use.
 
 ## Quick start
 

@@ -8,7 +8,7 @@
  * These are *structural* types: they describe the wire format. Cross-field
  * cube invariants (e.g. `value.length === size.reduce(product)`) live in the
  * core engine, mirroring how the official JSON Schemas defer semantic checks
- * to a separate jsonstat-validator (not bundled here).
+ * to a separate @jsonstat-validator/ts (not bundled here).
  */
 
 // ---------------------------------------------------------------------------

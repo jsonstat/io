@@ -1,6 +1,6 @@
 {
   "name": "jsonstat-io",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Bidirectional bridge between the columnar stack (Apache Arrow, Parquet, DuckDB, Polars, CSVW, CSV, CSV-stat, Data Package) and JSON-stat 2.0 cubes. An Arrow-hubbed interop layer for the lakehouse ecosystem.",
   "license": "Apache-2.0",
   "author": "Xavier Badosa",
@@ -110,10 +110,10 @@
     "apache-arrow": "^17.0.0",
     "commander": "^12.1.0"
   },
-  "optionalDependencies": {
+  "peerDependencies": {
     "@duckdb/duckdb-wasm": "^1.29.0",
+    "@jsonstat-validator/ts": "^1.0.1",
     "duckdb-async": "^1.2.1",
-    "jsonstat-validator": "^2.5.0",
     "nodejs-polars": "^0.15.0",
     "parquet-wasm": "^0.6.1"
   },
@@ -121,10 +121,10 @@
     "@duckdb/duckdb-wasm": {
       "optional": true
     },
-    "duckdb-async": {
+    "@jsonstat-validator/ts": {
       "optional": true
     },
-    "jsonstat-validator": {
+    "duckdb-async": {
       "optional": true
     },
     "nodejs-polars": {
@@ -136,7 +136,11 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@duckdb/duckdb-wasm": "^1.29.0",
     "@types/node": "^22.10.0",
+    "duckdb-async": "^1.2.1",
+    "nodejs-polars": "^0.15.0",
+    "parquet-wasm": "^0.6.1",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^3.2.7"
